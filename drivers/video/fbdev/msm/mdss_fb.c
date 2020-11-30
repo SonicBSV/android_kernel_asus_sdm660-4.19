@@ -47,8 +47,8 @@
 #include "mdss_mdp.h"
 #include "mdss_sync.h"
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 start*/
-#include <linux/wakelock.h>
-static struct wake_lock early_unblank_wakelock;
+#include <linux/pm_wakeup.h>
+static struct wakeup_source *early_unblank_wakelock;
 extern bool lcd_suspend_flag;
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 end*/
 
@@ -1636,7 +1636,7 @@ static void asus_lcd_early_unblank_func(struct work_struct *work)
 	if (!fbi)
 		return;
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 start*/
-	wake_lock_timeout(&early_unblank_wakelock,msecs_to_jiffies(300));
+	__pm_wakeup_event(early_unblank_wakelock,msecs_to_jiffies(300));
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 end*/
 	printk("[Display] Early unblank func +++ \n");
 	fb_blank(fbi, FB_BLANK_UNBLANK);
@@ -5300,7 +5300,7 @@ int __init mdss_fb_init(void)
 
 	asus_lcd_early_unblank_wq = create_singlethread_workqueue("display_early_wq");
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 start*/
-	wake_lock_init(&early_unblank_wakelock, WAKE_LOCK_SUSPEND, "early_unblank-update");
+        early_unblank_wakelock = wakeup_source_register(NULL, "early_unblank-update");
 /* Huaqin modify for No repetition lcd suspend by qimaokang at 2018/12/07 end*/
 	return 0;
 }
