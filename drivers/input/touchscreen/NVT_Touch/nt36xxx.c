@@ -335,7 +335,7 @@ static void nvt_irq_enable(bool enable)
 	}
 
 	desc = irq_to_desc(ts->client->irq);
-	NVT_LOG("enable=%d, desc->depth=%d\n", enable, desc->depth);
+	NVT_DBG("enable=%d, desc->depth=%d\n", enable, desc->depth);
 }
 
 /*******************************************************
@@ -884,70 +884,70 @@ void nvt_ts_wakeup_gesture_report(uint8_t gesture_id)
 {
 	uint32_t keycode = 0;
 
-	NVT_LOG("gesture_id = %d\n", gesture_id);
+	NVT_DBG("gesture_id = %d\n", gesture_id);
 
 
 	if (allow_gesture) {
 		switch (gesture_id) {
 			case GESTURE_WORD_C:
-				NVT_LOG("Gesture : Word-C.\n");
+				NVT_DBG("Gesture : Word-C.\n");
 				keycode = gesture_key_array[0];
 				break;
 			case GESTURE_WORD_W:
-				NVT_LOG("Gesture : Word-W.\n");
+				NVT_DBG("Gesture : Word-W.\n");
 				keycode = gesture_key_array[1];
 				break;
 			case GESTURE_WORD_V:
-				NVT_LOG("Gesture : Word-V.\n");
+				NVT_DBG("Gesture : Word-V.\n");
 				keycode = gesture_key_array[2];
 				break;
 			case GESTURE_DOUBLE_CLICK:
 				if (allow_dclick) {
-					NVT_LOG("Gesture : Double Click.\n");
+					NVT_DBG("Gesture : Double Click.\n");
 					keycode = gesture_key_array[3];
 				}
 				break;
 			case GESTURE_WORD_Z:
-				NVT_LOG("Gesture : Word-Z.\n");
+				NVT_DBG("Gesture : Word-Z.\n");
 				keycode = gesture_key_array[4];
 				break;
 			case GESTURE_WORD_M:
-				NVT_LOG("Gesture : Word-M.\n");
+				NVT_DBG("Gesture : Word-M.\n");
 				keycode = gesture_key_array[5];
 				break;
 			case GESTURE_WORD_O:
-				NVT_LOG("Gesture : Word-O.\n");
+				NVT_DBG("Gesture : Word-O.\n");
 				keycode = gesture_key_array[6];
 				break;
 			case GESTURE_WORD_e:
-				NVT_LOG("Gesture : Word-e.\n");
+				NVT_DBG("Gesture : Word-e.\n");
 				keycode = gesture_key_array[7];
 				break;
 			case GESTURE_WORD_S:
-				NVT_LOG("Gesture : Word-S.\n");
+				NVT_DBG("Gesture : Word-S.\n");
 				keycode = gesture_key_array[8];
 				break;
 			case GESTURE_SLIDE_UP:
-				NVT_LOG("Gesture : Slide UP.\n");
+				NVT_DBG("Gesture : Slide UP.\n");
 				keycode = gesture_key_array[9];
 				break;
 			case GESTURE_SLIDE_DOWN:
-				NVT_LOG("Gesture : Slide DOWN.\n");
+				NVT_DBG("Gesture : Slide DOWN.\n");
 				keycode = gesture_key_array[10];
 				break;
 			case GESTURE_SLIDE_LEFT:
-				NVT_LOG("Gesture : Slide LEFT.\n");
+				NVT_DBG("Gesture : Slide LEFT.\n");
 				keycode = gesture_key_array[11];
 				break;
 			case GESTURE_SLIDE_RIGHT:
-				NVT_LOG("Gesture : Slide RIGHT.\n");
+				NVT_DBG("Gesture : Slide RIGHT.\n");
 				keycode = gesture_key_array[12];
 				break;
 			default:
 				break;
 		}
 	} else if(allow_dclick && gesture_id == GESTURE_DOUBLE_CLICK) {
-		  NVT_LOG("Gesture : Double Click.\n");
+		  NVT_DBG("Gesture : Double Click.\n");
 		  keycode = gesture_key_array[3];		
 	  }
 
@@ -1880,7 +1880,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	mutex_lock(&ts->lock);
 
-	NVT_LOG("start\n");
+	NVT_DBG("start\n");
 
 	bTouchIsAwake = 0;
 
@@ -1893,9 +1893,9 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
 #ifdef NVT_POWER_SOURCE_CUST_EN		
 		nvt_lcm_power_source_ctrl(data, 0);
-		NVT_LOG("sleep suspend end  disable vsp/vsn\n");
+		NVT_DBG("sleep suspend end  disable vsp/vsn\n");
 #endif	
-		NVT_LOG("Disabled touch wakeup gesture\n");
+		NVT_DBG("Disabled touch wakeup gesture\n");
 	}
 	else {
 		//---write i2c command to enter "wakeup gesture mode"---
@@ -1904,8 +1904,8 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
 
 		nvt_irq_enable(true);
-		NVT_LOG("gesture suspend end not disable vsp/vsn\n");
-		NVT_LOG("Enabled touch wakeup gesture\n");
+		NVT_DBG("gesture suspend end not disable vsp/vsn\n");
+		NVT_DBG("Enabled touch wakeup gesture\n");
 	}
 
 #else // WAKEUP_GESTURE
@@ -1935,7 +1935,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	msleep(50);
 
-	NVT_LOG("end\n");
+	NVT_DBG("end\n");
 
 	return 0;
 }
@@ -1960,7 +1960,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 
 	mutex_lock(&ts->lock);
 
-	NVT_LOG("start\n");
+	NVT_DBG("start\n");
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
 #if NVT_TOUCH_SUPPORT_HW_RST
@@ -1989,7 +1989,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 
 	mutex_unlock(&ts->lock);
 
-	NVT_LOG("end\n");
+	NVT_DBG("end\n");
 
 	return 0;
 }
@@ -2035,13 +2035,13 @@ static int nvt_fb_notifier_callback(struct notifier_block *self, unsigned long e
 	if (evdata && evdata->data && event == FB_EARLY_EVENT_BLANK) {
 		blank = evdata->data;
 		if (*blank == FB_BLANK_POWERDOWN) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
+			NVT_DBG("event=%lu, *blank=%d\n", event, *blank);
 			nvt_ts_suspend(&ts->client->dev);
 		}
 	} else if (evdata && evdata->data && event == FB_EVENT_BLANK) {
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
+			NVT_DBG("event=%lu, *blank=%d\n", event, *blank);
 			nvt_ts_resume(&ts->client->dev);
 		}
 	}
