@@ -67,6 +67,10 @@
 #include <linux/sched.h>
 #endif
 
+#ifdef CONFIG_KSU
+#include <linux/ksu.h>
+#endif
+
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1910,11 +1914,20 @@ out_ret:
 	return retval;
 }
 
+#ifdef CONFIG_KSU
+extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
+			void *envp, int *flags);
+#endif
+
 static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr argv,
 			      struct user_arg_ptr envp,
 			      int flags)
 {
+#ifdef CONFIG_KSU
+	if (get_ksu_state() > 0)
+		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+#endif
 	return __do_execve_file(fd, filename, argv, envp, flags, NULL);
 }
 
