@@ -491,10 +491,8 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 
 	/* find the IRQs */
 	info->irq_tick = platform_get_irq(pdev, 1);
-	if (info->irq_tick < 0) {
-		dev_err(&pdev->dev, "no irq for rtc tick\n");
+	if (info->irq_tick < 0)
 		return info->irq_tick;
-	}
 
 	info->dev = &pdev->dev;
 	info->data = s3c_rtc_get_data(pdev);
@@ -508,10 +506,8 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, info);
 
 	info->irq_alarm = platform_get_irq(pdev, 0);
-	if (info->irq_alarm < 0) {
-		dev_err(&pdev->dev, "no irq for alarm\n");
+	if (info->irq_alarm < 0)
 		return info->irq_alarm;
-	}
 
 	dev_dbg(&pdev->dev, "s3c2410_rtc: tick irq %d, alarm irq %d\n",
 		info->irq_tick, info->irq_alarm);
@@ -524,11 +520,8 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 
 	info->rtc_clk = devm_clk_get(&pdev->dev, "rtc");
 	if (IS_ERR(info->rtc_clk)) {
-		ret = PTR_ERR(info->rtc_clk);
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "failed to find rtc clock\n");
-		else
-			dev_dbg(&pdev->dev, "probe deferred due to missing rtc clk\n");
+		ret = dev_err_probe(&pdev->dev, PTR_ERR(info->rtc_clk),
+							"failed to find rtc clock\n");
 		return ret;
 	}
 	ret = clk_prepare_enable(info->rtc_clk);
@@ -538,13 +531,8 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 	if (info->data->needs_src_clk) {
 		info->rtc_src_clk = devm_clk_get(&pdev->dev, "rtc_src");
 		if (IS_ERR(info->rtc_src_clk)) {
-			ret = PTR_ERR(info->rtc_src_clk);
-			if (ret != -EPROBE_DEFER)
-				dev_err(&pdev->dev,
-					"failed to find rtc source clock\n");
-			else
-				dev_dbg(&pdev->dev,
-					"probe deferred due to missing rtc src clk\n");
+			ret = dev_err_probe(&pdev->dev, PTR_ERR(info->rtc_src_clk),
+					    "failed to find rtc source clock\n");
 			goto err_src_clk;
 		}
 		ret = clk_prepare_enable(info->rtc_src_clk);

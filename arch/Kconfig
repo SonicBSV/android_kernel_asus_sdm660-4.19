@@ -360,6 +360,9 @@ config HAVE_PERF_USER_STACK_DUMP
 config HAVE_ARCH_JUMP_LABEL
 	bool
 
+config HAVE_ARCH_JUMP_LABEL_RELATIVE
+	bool
+
 config HAVE_RCU_TABLE_FREE
 	bool
 
@@ -1033,6 +1036,15 @@ config PANIC_ON_REFCOUNT_ERROR
 
 config ARCH_USE_MEMREMAP_PROT
 	bool
+
+config LOCK_EVENT_COUNTS
+	bool "Locking event counts collection"
+	depends on DEBUG_FS
+	---help---
+	  Enable light-weight counting of various locking related events
+	  in the system with minimal performance impact. This reduces
+	  the chance of application behavior change because of timing
+	  differences. The counts are reported via debugfs.
 
 # Select if the architecture has support for applying RELR relocations.
 config ARCH_HAS_RELR

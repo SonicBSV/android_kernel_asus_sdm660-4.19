@@ -64,7 +64,7 @@ struct pm_qos_object {
 	char *name;
 };
 
-static DEFINE_RAW_SPINLOCK(pm_qos_lock);
+static DEFINE_SPINLOCK(pm_qos_lock);
 
 static struct pm_qos_object null_pm_qos;
 
@@ -214,7 +214,7 @@ static int pm_qos_dbg_show_requests(struct seq_file *s, void *unused)
 	}
 
 	/* Lock to ensure we have a snapshot */
-	raw_spin_lock(&pm_qos_lock);
+	spin_lock(&pm_qos_lock);
 	if (plist_head_empty(&c->list)) {
 		seq_puts(s, "Empty!\n");
 		goto out;
@@ -250,7 +250,7 @@ static int pm_qos_dbg_show_requests(struct seq_file *s, void *unused)
 		   type, pm_qos_get_value(c), active_reqs, tot_reqs);
 
 out:
-	raw_spin_unlock(&pm_qos_lock);
+	spin_unlock(&pm_qos_lock);
 	return 0;
 }
 
@@ -357,7 +357,7 @@ static int pm_qos_update_target_cpus(struct pm_qos_constraints *c,
 	unsigned long cpus = 0;
 	int ret;
 
-	raw_spin_lock(&pm_qos_lock);
+	spin_lock(&pm_qos_lock);
 	prev_value = pm_qos_get_value(c);
 	if (value == PM_QOS_DEFAULT_VALUE)
 		new_value = c->default_value;
@@ -389,7 +389,7 @@ static int pm_qos_update_target_cpus(struct pm_qos_constraints *c,
 	pm_qos_set_value(c, curr_value);
 	ret = pm_qos_set_value_for_cpus(req, c, &cpus, new_cpus, action, dev_req);
 
-	raw_spin_unlock(&pm_qos_lock);
+	spin_unlock(&pm_qos_lock);
 
 	trace_pm_qos_update_target(action, prev_value, curr_value);
 
@@ -461,7 +461,7 @@ bool pm_qos_update_flags(struct pm_qos_flags *pqf,
 {
 	s32 prev_value, curr_value;
 
-	raw_spin_lock(&pm_qos_lock);
+	spin_lock(&pm_qos_lock);
 
 	prev_value = list_empty(&pqf->list) ? 0 : pqf->effective_flags;
 
@@ -485,7 +485,7 @@ bool pm_qos_update_flags(struct pm_qos_flags *pqf,
 
 	curr_value = list_empty(&pqf->list) ? 0 : pqf->effective_flags;
 
-	raw_spin_unlock(&pm_qos_lock);
+	spin_unlock(&pm_qos_lock);
 
 	trace_pm_qos_update_flags(action, prev_value, curr_value);
 	return prev_value != curr_value;
@@ -524,7 +524,7 @@ int pm_qos_request_for_cpumask(int pm_qos_class, struct cpumask *mask)
 	struct pm_qos_constraints *c = NULL;
 	int val;
 
-	raw_spin_lock(&pm_qos_lock);
+	spin_lock(&pm_qos_lock);
 	c = pm_qos_array[pm_qos_class]->constraints;
 	val = c->default_value;
 
@@ -543,7 +543,7 @@ int pm_qos_request_for_cpumask(int pm_qos_class, struct cpumask *mask)
 			break;
 		}
 	}
-	raw_spin_unlock(&pm_qos_lock);
+	spin_unlock(&pm_qos_lock);
 
 	return val;
 }
@@ -558,21 +558,6 @@ static void __pm_qos_update_request(struct pm_qos_request *req,
 		pm_qos_update_target(
 			pm_qos_array[req->pm_qos_class]->constraints,
 			&req->node, PM_QOS_UPDATE_REQ, new_value, false);
-}
-
-/**
- * pm_qos_work_fn - the timeout handler of pm_qos_update_request_timeout
- * @work: work struct for the delayed work (timeout)
- *
- * This cancels the timeout request by falling back to the default at timeout.
- */
-static void pm_qos_work_fn(struct work_struct *work)
-{
-	struct pm_qos_request *req = container_of(to_delayed_work(work),
-						  struct pm_qos_request,
-						  work);
-
-	__pm_qos_update_request(req, PM_QOS_DEFAULT_VALUE);
 }
 
 #ifdef CONFIG_SMP
@@ -668,7 +653,6 @@ void pm_qos_add_request(struct pm_qos_request *req,
 	}
 
 	req->pm_qos_class = pm_qos_class;
-	INIT_DELAYED_WORK(&req->work, pm_qos_work_fn);
 	trace_pm_qos_add_request(pm_qos_class, value);
 	pm_qos_update_target(pm_qos_array[pm_qos_class]->constraints,
 			     &req->node, PM_QOS_ADD_REQ, value, false);
@@ -714,40 +698,9 @@ void pm_qos_update_request(struct pm_qos_request *req,
 		return;
 	}
 
-	cancel_delayed_work_sync(&req->work);
 	__pm_qos_update_request(req, new_value);
 }
 EXPORT_SYMBOL_GPL(pm_qos_update_request);
-
-/**
- * pm_qos_update_request_timeout - modifies an existing qos request temporarily.
- * @req : handle to list element holding a pm_qos request to use
- * @new_value: defines the temporal qos request
- * @timeout_us: the effective duration of this qos request in usecs.
- *
- * After timeout_us, this qos request is cancelled automatically.
- */
-void pm_qos_update_request_timeout(struct pm_qos_request *req, s32 new_value,
-				   unsigned long timeout_us)
-{
-	if (!req)
-		return;
-	if (WARN(!pm_qos_request_active(req),
-		 "%s called for unknown object.", __func__))
-		return;
-
-	cancel_delayed_work_sync(&req->work);
-
-	trace_pm_qos_update_request_timeout(req->pm_qos_class,
-					    new_value, timeout_us);
-	if (new_value != req->node.prio)
-		pm_qos_update_target(
-			pm_qos_array[req->pm_qos_class]->constraints,
-			&req->node, PM_QOS_UPDATE_REQ, new_value, false);
-
-	schedule_delayed_work(&req->work, usecs_to_jiffies(timeout_us));
-}
-EXPORT_SYMBOL_GPL(pm_qos_update_request_timeout);
 
 /**
  * pm_qos_remove_request - modifies an existing qos request
@@ -767,8 +720,6 @@ void pm_qos_remove_request(struct pm_qos_request *req)
 		WARN(1, "%s called for unknown object\n", __func__);
 		return;
 	}
-
-	cancel_delayed_work_sync(&req->work);
 
 #ifdef CONFIG_SMP
 	if (req->type == PM_QOS_REQ_AFFINE_IRQ) {
@@ -895,9 +846,9 @@ static ssize_t pm_qos_power_read(struct file *filp, char __user *buf,
 	if (!pm_qos_request_active(req))
 		return -EINVAL;
 
-	raw_spin_lock(&pm_qos_lock);
+	spin_lock(&pm_qos_lock);
 	value = pm_qos_get_value(pm_qos_array[req->pm_qos_class]->constraints);
-	raw_spin_unlock(&pm_qos_lock);
+	spin_unlock(&pm_qos_lock);
 
 	return simple_read_from_buffer(buf, count, f_pos, &value, sizeof(s32));
 }

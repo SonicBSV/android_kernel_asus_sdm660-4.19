@@ -17,7 +17,7 @@ SCHED_FEAT(START_DEBIT, true)
  * wakeup-preemption), since its likely going to consume data we
  * touched, increases cache locality.
  */
-SCHED_FEAT(NEXT_BUDDY, false)
+SCHED_FEAT(NEXT_BUDDY, true)
 
 /*
  * Prefer to schedule the task that ran last (when we did
@@ -51,15 +51,6 @@ SCHED_FEAT(NONTASK_CAPACITY, false)
  * using the scheduler IPI. Reduces rq->lock contention/bounces.
  */
 SCHED_FEAT(TTWU_QUEUE, true)
-
-/*
- * Queue remote wakeups on the target CPU even if the current
- * CPU and the origin CPU share a cache. Targets L1 cache hits
- * in addition to L2 cache hits. May increase task wakeup latency.
- *
- * Requires TTWU_QUEUE to be enabled.
- */
-SCHED_FEAT(TTWU_QUEUE_SAME_FORCE, true)
 
 /*
  * When doing wakeups, attempt to limit superfluous scans of the LLC domain.
@@ -113,8 +104,7 @@ SCHED_FEAT(FIND_BEST_TARGET, false)
  *   the EAS path for wakeup task placement. Otherwise, put
  *   those tasks through the mainline slow path.
  */
-
-SCHED_FEAT(EAS_PREFER_IDLE, false)
+SCHED_FEAT(EAS_PREFER_IDLE, true)
 
 /*
  * Request max frequency from schedutil whenever a RT task is running.

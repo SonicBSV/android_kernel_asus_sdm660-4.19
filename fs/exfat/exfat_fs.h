@@ -16,12 +16,6 @@
 #define SECTOR_SIZE	512
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
-#include <linux/magic.h>
-#else
-#define EXFAT_SUPER_MAGIC       0x2011BAB0UL
-#endif
-
 #define EXFAT_VERSION		"6.0.0"
 
 #define EXFAT_ROOT_INO		1
