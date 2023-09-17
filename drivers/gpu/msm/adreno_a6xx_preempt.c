@@ -546,8 +546,9 @@ unsigned int a6xx_preemption_pre_ibsubmit(
 		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 		struct adreno_context *drawctxt = ADRENO_CONTEXT(context);
 		struct adreno_ringbuffer *rb = drawctxt->rb;
-		uint64_t dest = adreno_dev->preempt.scratch.gpuaddr +
-			sizeof(u64) * rb->id;
+		uint64_t dest =
+			SCRATCH_PREEMPTION_CTXT_RESTORE_GPU_ADDR(device,
+			rb->id);
 
 		*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
 		cmds += cp_gpuaddr(adreno_dev, cmds, dest);
@@ -565,8 +566,9 @@ unsigned int a6xx_preemption_post_ibsubmit(struct adreno_device *adreno_dev,
 	struct adreno_ringbuffer *rb = adreno_dev->cur_rb;
 
 	if (rb) {
-		uint64_t dest = adreno_dev->preempt.scratch.gpuaddr +
-			sizeof(u64) * rb->id;
+		struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+		uint64_t dest = SCRATCH_PREEMPTION_CTXT_RESTORE_GPU_ADDR(device,
+			rb->id);
 
 		*cmds++ = cp_mem_packet(adreno_dev, CP_MEM_WRITE, 2, 2);
 		cmds += cp_gpuaddr(adreno_dev, cmds, dest);
@@ -761,9 +763,6 @@ int a6xx_preemption_init(struct adreno_device *adreno_dev)
 	INIT_WORK(&preempt->work, _a6xx_preemption_worker);
 
 	timer_setup(&preempt->timer, _a6xx_preemption_timer, 0);
-
-	ret = kgsl_allocate_global(device, &preempt->scratch, PAGE_SIZE, 0, 0,
-			"preemption_scratch");
 
 	/* Allocate mem for storing preemption switch record */
 	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
