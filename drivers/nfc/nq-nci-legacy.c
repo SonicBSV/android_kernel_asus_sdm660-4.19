@@ -1274,7 +1274,6 @@ static int nqx_probe(struct i2c_client *client,
 		/* We don't think there is hardware switch NFC OFF */
 		goto err_request_hw_check_failed;
 	}
-	*/
 
 	/* Show if hardware supports nfc. */
 	has_nfc_proc = proc_create("NFC_CHECK", 0444, NULL, &proc_has_nfc_fops);
