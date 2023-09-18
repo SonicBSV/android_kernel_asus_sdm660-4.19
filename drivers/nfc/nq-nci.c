@@ -6,6 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#include <linux/proc_fs.h>
 #include <linux/reboot.h>
 #include <linux/slab.h>
 #include <linux/irq.h>
@@ -89,6 +90,8 @@ struct nqx_dev {
 	struct regulator *reg;
 };
 
+static bool has_nfc;
+
 static int nfcc_reboot(struct notifier_block *notifier, unsigned long val,
 			void *v);
 /*clock enable function*/
@@ -159,6 +162,29 @@ static irqreturn_t nqx_dev_irq_handler(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
+
+static ssize_t proc_has_nfc_show(struct file *file, char __user *user_buf,
+						size_t count, loff_t *ppos)
+{
+	int ret = 0;
+	char page[PAGESIZE] = {0};
+
+	if (has_nfc)
+		snprintf(page, PAGESIZE-1, "%s", "SUPPORTED");
+	else
+		snprintf(page, PAGESIZE-1, "%s", "NOT SUPPORTED");
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, page,
+					strlen(page));
+	return ret;
+}
+
+static struct proc_dir_entry *has_nfc_proc = NULL;
+static const struct file_operations proc_has_nfc_fops = {
+	.read  = proc_has_nfc_show,
+	.open  = simple_open,
+	.owner = THIS_MODULE,
+};
 
 static int is_data_available_for_read(struct nqx_dev *nqx_dev)
 {
@@ -1370,7 +1396,8 @@ done:
 	kfree(nci_reset_cmd);
 	kfree(nci_get_version_cmd);
 	kfree(nci_get_version_rsp);
-
+	// When Success the ret must be 0
+	has_nfc = !ret;
 	return ret;
 }
 
@@ -1738,6 +1765,12 @@ static int nqx_probe(struct i2c_client *client,
 		/* We don't think there is hardware switch NFC OFF */
 		goto err_request_hw_check_failed;
 	}
+
+	/* Show if hardware supports nfc. */
+	has_nfc_proc = proc_create("NFC_CHECK", 0444, NULL, &proc_has_nfc_fops);
+	if (has_nfc_proc == NULL)
+		dev_err(&client->dev, "%s: Couldn't create proc entry, %d\n",
+			__func__);
 
 	/* Register reboot notifier here */
 	r = register_reboot_notifier(&nfcc_notifier);
