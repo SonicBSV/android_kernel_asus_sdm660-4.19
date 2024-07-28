@@ -1,14 +1,5 @@
-KnightWalker 4.19.x Kernel Source
+Ratibor 4.19.x Kernel Source based on KnightWalker by RyuujiX
 ====================================
-
-Getting Started
----------------
-You can use this source if u Want or Download Builded Kernel / Release build from this https://telegra.ph/Projekt-Walker-419-Kernel-Download-Links-09-25 ,
-
-Clone with `--recursive` option coz this source has submodule.
-
-Just Copy, Paste, Then Execute the command :)
-
 
 OverClock Kernel
 ------------------
@@ -17,12 +8,12 @@ This Kernel is using Stock Freq. If u want Overclocked Freq, Do this:
 To Overclock CPU:
 
 - Add `overclock.cpu=1` into boot cmdline. Or
-- Hardcode, set this to 1 https://github.com/RyuujiX/android_kernel_asus_sdm660-4.19/blob/test/drivers/clk/qcom/clk-cpu-osm-660.c#L263
+- Hardcode, set this to 1 https://github.com/SonicBSV/android_kernel_asus_sdm660-4.19/blob/lineage-21.0/drivers/clk/qcom/clk-cpu-osm-660.c#L263
 
 To Overclock GPU:
 
 - Add `overclock.gpu=1` into boot cmdline. Or
-- Hardcode, set this to 1 https://github.com/RyuujiX/android_kernel_asus_sdm660-4.19/blob/test/drivers/gpu/msm/adreno.c#L31
+- Hardcode, set this to 1 https://github.com/SonicBSV/android_kernel_asus_sdm660-4.19/blob/lineage-21.0/drivers/gpu/msm/adreno.c#L31
 
 KernelSU
 --------
@@ -48,19 +39,5 @@ Working smoothly on mine with new driver.
 If u want to use new driver, do this:
 
 - Add `use_new_nvtouch=1` into boot cmdline. Or
-- Hardcode, set this to 1 https://github.com/RyuujiX/android_kernel_asus_sdm660-4.19/blob/test/init/main.c#L147
+- Hardcode, set this to 1 https://github.com/SonicBSV/android_kernel_asus_sdm660-4.19/blob/lineage-21.0/init/main.c#L145
 - Or, Disable Original NVT Driver in defconfig. `CONFIG_TOUCHSCREEN_NT36xxx_ASUS` is New NVT Driver.
-
-Spectrum Support
-----------------
-Pick Spectrum Script from Here: https://github.com/RyuujiX/spectrum , then rename it to init.spectrum.rc
-
-Name: 4.19-xxxxxxxxx
-
-Note: 4.19-xxxx-oc is for Overclocked Both CPU and GPU.
-
-Or , make it by ur self .
-
-My CI Builder Script
---------------------
-Check it out: https://github.com/RyuujiX/builder-xobod-r
