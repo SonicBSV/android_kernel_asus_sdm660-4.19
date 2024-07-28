@@ -1,6 +1,6 @@
-#include "linux/uaccess.h"
-#include "linux/types.h"
-#include "linux/version.h"
+#include <linux/uaccess.h>
+#include <linux/types.h>
+#include <linux/version.h>
 
 #include "../klog.h" // IWYU pragma: keep
 #include "selinux.h"
@@ -69,6 +69,11 @@ void apply_kernelsu_rules()
 	// we need to save allowlist in /data/adb/ksu
 	ksu_allow(db, "kernel", "adb_data_file", "dir", ALL);
 	ksu_allow(db, "kernel", "adb_data_file", "file", ALL);
+	// we need to search /data/app
+	ksu_allow(db, "kernel", "apk_data_file", "file", "open");
+	ksu_allow(db, "kernel", "apk_data_file", "dir", "open");
+	ksu_allow(db, "kernel", "apk_data_file", "dir", "read");
+	ksu_allow(db, "kernel", "apk_data_file", "dir", "search");
 	// we may need to do mount on shell
 	ksu_allow(db, "kernel", "shell_data_file", "file", ALL);
 	// we need to read /data/system/packages.list
@@ -84,6 +89,7 @@ void apply_kernelsu_rules()
 	ksu_allow(db, "kernel", "system_data_file", "dir", ALL);
 	// our ksud triggered by init
 	ksu_allow(db, "init", "adb_data_file", "file", ALL);
+	ksu_allow(db, "init", "adb_data_file", "dir", ALL); // #1289
 	ksu_allow(db, "init", KERNEL_SU_DOMAIN, ALL, ALL);
 	// we need to umount modules in zygote
 	ksu_allow(db, "zygote", "adb_data_file", "dir", "search");
@@ -124,11 +130,9 @@ void apply_kernelsu_rules()
 	// Allow all binder transactions
 	ksu_allow(db, ALL, KERNEL_SU_DOMAIN, "binder", ALL);
 
-	// Allow system server devpts
-	ksu_allow(db, "system_server", "untrusted_app_all_devpts", "chr_file",
-		  "read");
-	ksu_allow(db, "system_server", "untrusted_app_all_devpts", "chr_file",
-		  "write");
+    // Allow system server kill su process
+    ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
+    ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
 
 	rcu_read_unlock();
 }
@@ -177,7 +181,8 @@ static int get_object(char *buf, char __user *user_object, size_t buf_sz,
 // reset avc cache table, otherwise the new rules will not take effect if already denied
 static void reset_avc_cache()
 {
-#ifndef KSU_COMPAT_USE_SELINUX_STATE
+#if ((!defined(KSU_COMPAT_USE_SELINUX_STATE)) || \
+        LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
 	avc_ss_reset(0);
 	selnl_notify_policyload(0);
 	selinux_status_update_policyload(0);
