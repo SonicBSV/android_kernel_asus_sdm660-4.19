@@ -991,15 +991,8 @@ void SBOOT_UPDATE_FIRMWARE(struct work_struct *work)
 
 	char firmware_name[256] = "";
 
-	NVT_LOG("zhengwu snvt_tp_check=%d\n",snvt_tp_check);
-	if(snvt_tp_check == 0){
-	snprintf(firmware_name, sizeof(firmware_name), DJ_BOOT_UPDATE_FIRMWARE_NAME);
-	NVT_LOG("it's dj tp\n");
-	}
-	else if (snvt_tp_check == 1){
-	snprintf(firmware_name, sizeof(firmware_name), TXD_BOOT_UPDATE_FIRMWARE_NAME);
-	NVT_LOG("it's txd tp\n");
-	}
+	snprintf(firmware_name, sizeof(firmware_name),
+			SBOOT_UPDATE_FIRMWARE_NAME);
 
 	// request bin file in "/etc/firmware"
 	ret = update_firmware_request(firmware_name);

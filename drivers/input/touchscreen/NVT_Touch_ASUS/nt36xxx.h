@@ -96,9 +96,8 @@ extern const uint16_t touch_key_array[STOUCH_KEY_NUM];
 #if SWAKEUP_GESTURE
 extern const uint16_t sgesture_key_array[];
 #endif
-#define SBOOT_UPDATE_FIRMWARE 1
-#define DJ_BOOT_UPDATE_FIRMWARE_NAME "novatek_ts_fw_dj.bin"
-#define TXD_BOOT_UPDATE_FIRMWARE_NAME "novatek_ts_fw_txd.bin"
+#define SBOOT_UPDATE_FIRMWARE 0
+#define SBOOT_UPDATE_FIRMWARE_NAME "novatek_ts_fw.bin"
 
 //---ESD Protect.---
 #define SNVT_TOUCH_ESD_PROTECT 0
