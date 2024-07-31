@@ -610,6 +610,16 @@
 #define KEY_BRIGHTNESS_MIN		0x250	/* Set Brightness to Minimum */
 #define KEY_BRIGHTNESS_MAX		0x251	/* Set Brightness to Maximum */
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+#define FP_KEY_UP		KEY_UP
+#define FP_KEY_DOWN		KEY_DOWN
+#define FP_KEY_LEFT		KEY_LEFT
+#define FP_KEY_RIGHT		KEY_RIGHT
+#define FP_KEY_CLICK		KEY_VOLUMEDOWN
+#define FP_KEY_DOUBLE_CLICK	KEY_VOLUMEUP
+#define FP_KEY_LONG_PRESS	KEY_SEARCH
+#endif
+
 #define KEY_KBDINPUTASSIST_PREV		0x260
 #define KEY_KBDINPUTASSIST_NEXT		0x261
 #define KEY_KBDINPUTASSIST_PREVGROUP		0x262
@@ -691,6 +701,26 @@
 #define BTN_TRIGGER_HAPPY39		0x2e6
 #define BTN_TRIGGER_HAPPY40		0x2e7
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+#define KEY_TP_GESTURE_C		748
+#define KEY_TP_GESTURE_E		749
+#define KEY_TP_GESTURE_M		750
+#define KEY_TP_GESTURE_O		751
+#define KEY_TP_GESTURE_S		752
+#define KEY_TP_GESTURE_V		753
+#define KEY_TP_GESTURE_W		754
+#define KEY_TP_GESTURE_Z		755
+#define KEY_TP_GESTURE_SWIPE_UP		756
+#define KEY_TP_GESTURE_SWIPE_DOWN	757
+#define KEY_TP_GESTURE_SWIPE_LEFT	758
+#define KEY_TP_GESTURE_SWIPE_RIGHT	759
+#endif
+
+#ifdef CONFIG_MACH_ASUS_X00TD
+#define KEY_SARSENSOR_NEAR		0x2ea
+#define KEY_SARSENSOR_FAR		0x2eb
+#endif
+
 /* We avoid low common keys in module aliases so they don't get huge. */
 #define KEY_MIN_INTERESTING	KEY_MUTE
 #define KEY_MAX			0x2ff
@@ -746,6 +776,7 @@
 
 #define ABS_MISC		0x28
 
+#ifndef CONFIG_MACH_ASUS_X00TD
 /*
  * 0x2e is reserved and should not be used in input drivers.
  * It was used by HID as ABS_MISC+6 and userspace needs to detect if
@@ -754,6 +785,7 @@
  * the situation described above.
  */
 #define ABS_RESERVED		0x2e
+#endif
 
 #define ABS_MT_SLOT		0x2f	/* MT slot being modified */
 #define ABS_MT_TOUCH_MAJOR	0x30	/* Major axis of touching ellipse */
