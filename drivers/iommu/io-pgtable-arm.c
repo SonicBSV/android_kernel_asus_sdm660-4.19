@@ -21,8 +21,8 @@
 #define pr_fmt(fmt)	"arm-lpae io-pgtable: " fmt
 
 #include <linux/atomic.h>
-#include <linux/io-pgtable.h>
 #include <linux/iommu.h>
+#include <linux/io-pgtable.h>
 #include <linux/kernel.h>
 #include <linux/scatterlist.h>
 #include <linux/sizes.h>
@@ -670,9 +670,11 @@ static int arm_lpae_map_sg(struct io_pgtable_ops *ops, unsigned long iova,
 				arm_lpae_iopte *ptep = ms.pgtable +
 					ARM_LPAE_LVL_IDX(iova, MAP_STATE_LVL,
 							 data);
-				arm_lpae_init_pte(
+				ret = arm_lpae_init_pte(
 					data, iova, phys, prot, MAP_STATE_LVL,
 					ptep, ms.prev_pgtable, false);
+				if (ret)
+					goto out_err;
 				ms.num_pte++;
 			} else {
 				ret = __arm_lpae_map(data, iova, phys, pgsize,

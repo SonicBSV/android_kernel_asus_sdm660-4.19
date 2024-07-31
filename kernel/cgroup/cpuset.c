@@ -870,6 +870,20 @@ void rebuild_sched_domains(void)
 	put_online_cpus();
 }
 
+static int update_cpus_allowed(struct cpuset *cs, struct task_struct *p,
+			       const struct cpumask *new_mask)
+{
+	int ret;
+
+	if (cpumask_subset(&p->cpus_requested, cs->cpus_requested)) {
+		ret = set_cpus_allowed_ptr(p, &p->cpus_requested);
+		if (!ret)
+			return ret;
+	}
+
+	return set_cpus_allowed_ptr(p, new_mask);
+}
+
 /**
  * update_tasks_cpumask - Update the cpumasks of tasks in the cpuset.
  * @cs: the cpuset in which each task's cpus_allowed mask needs to be changed
@@ -885,7 +899,7 @@ static void update_tasks_cpumask(struct cpuset *cs)
 
 	css_task_iter_start(&cs->css, 0, &it);
 	while ((task = css_task_iter_next(&it)))
-		set_cpus_allowed_ptr(task, cs->effective_cpus);
+		update_cpus_allowed(cs, task, cs->effective_cpus);
 	css_task_iter_end(&it);
 }
 
@@ -1279,7 +1293,7 @@ bool current_cpuset_is_being_rebound(void)
 static int update_relax_domain_level(struct cpuset *cs, s64 val)
 {
 #ifdef CONFIG_SMP
-	if (val < -1 || val > sched_domain_level_max + 1)
+	if (val < -1 || val >= sched_domain_level_max)
 		return -EINVAL;
 #endif
 
@@ -1556,7 +1570,7 @@ static void cpuset_attach(struct cgroup_taskset *tset)
 		 * can_attach beforehand should guarantee that this doesn't
 		 * fail.  TODO: have a better way to handle failure here
 		 */
-		WARN_ON_ONCE(set_cpus_allowed_ptr(task, cpus_attach));
+		WARN_ON_ONCE(update_cpus_allowed(cs, task, cpus_attach));
 
 		cpuset_change_task_nodemask(task, &cpuset_attach_nodemask_to);
 		cpuset_update_task_spread_flag(cs, task);

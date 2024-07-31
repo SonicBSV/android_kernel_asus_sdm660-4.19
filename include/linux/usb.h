@@ -22,7 +22,6 @@
 #include <linux/sched.h>	/* for current && schedule_timeout */
 #include <linux/mutex.h>	/* for struct mutex */
 #include <linux/pm_runtime.h>	/* for runtime PM */
-#include <linux/android_kabi.h>
 
 struct usb_device;
 struct usb_driver;
@@ -258,11 +257,6 @@ struct usb_interface {
 	struct device dev;		/* interface specific device info */
 	struct device *usb_dev;
 	struct work_struct reset_ws;	/* for resets in atomic context */
-
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 #define	to_usb_interface(d) container_of(d, struct usb_interface, dev)
 
@@ -314,7 +308,7 @@ bool usb_check_int_endpoints(
  * should cope with both LPJ calibration errors and devices not following every
  * detail of the USB Specification.
  */
-#define USB_RESUME_TIMEOUT	40 /* ms */
+#define USB_RESUME_TIMEOUT	20 /* ms */
 
 /**
  * struct usb_interface_cache - long-term representation of a device interface
@@ -415,11 +409,6 @@ struct usb_host_bos {
 	struct usb_ptm_cap_descriptor	*ptm_cap;
 	struct usb_config_summary_descriptor	*config_summary;
 	unsigned int	num_config_summary_desc;
-
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 
 int __usb_get_extra_descriptor(char *buffer, unsigned size,
@@ -493,11 +482,6 @@ struct usb_bus {
 					 * wakeup is detected or an interface
 					 * driver starts I/O.
 					 */
-
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 
 struct usb_dev_state;
@@ -739,11 +723,6 @@ struct usb_device {
 	unsigned lpm_disable_count;
 
 	u16 hub_delay;
-
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 #define	to_usb_device(d) container_of(d, struct usb_device, dev)
 
@@ -1253,11 +1232,6 @@ struct usb_driver {
 	unsigned int supports_autosuspend:1;
 	unsigned int disable_hub_initiated_lpm:1;
 	unsigned int soft_unbind:1;
-
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 #define	to_usb_driver(d) container_of(d, struct usb_driver, drvwrap.driver)
 
@@ -1632,10 +1606,6 @@ struct urb {
 	usb_complete_t complete;	/* (in) completion routine */
 	struct usb_iso_packet_descriptor iso_frame_desc[0];
 					/* (in) ISO ONLY */
-	ANDROID_KABI_RESERVE(1);
-	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
 };
 
 /* ----------------------------------------------------------------------- */
@@ -1867,6 +1837,8 @@ extern int usb_string(struct usb_device *dev, int index,
 extern int usb_clear_halt(struct usb_device *dev, int pipe);
 extern int usb_reset_configuration(struct usb_device *dev);
 extern int usb_set_interface(struct usb_device *dev, int ifnum, int alternate);
+extern int usb_set_interface_timeout(struct usb_device *dev, int ifnum,
+		int alternate, unsigned long timeout);
 extern void usb_reset_endpoint(struct usb_device *dev, unsigned int epaddr);
 
 /* this request isn't really synchronous, but it belongs with the others */

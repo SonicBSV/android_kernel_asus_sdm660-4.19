@@ -559,7 +559,7 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 	struct usb_ep *ep;
 	int i;
 
-	DBG(cdev, "create_bulk_endpoints dev: %p\n", dev);
+	DBG(cdev, "%s dev: %pK\n", __func__, dev);
 
 	ep = usb_ep_autoconfig(cdev->gadget, in_desc);
 	if (!ep) {
@@ -614,9 +614,8 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 {
 	struct acc_dev *dev = fp->private_data;
 	struct usb_request *req;
-	ssize_t r = count;
+	ssize_t r = count, xfer;
 	ssize_t data_length;
-	unsigned xfer;
 	int ret = 0;
 
 	pr_debug("acc_read(%zu)\n", count);
@@ -668,7 +667,7 @@ requeue_req:
 		r = -EIO;
 		goto done;
 	} else {
-		pr_debug("rx %p queue\n", req);
+		pr_debug("rx %pK queue\n", req);
 	}
 
 	/* wait for a request to complete */
@@ -691,7 +690,7 @@ copy_data:
 		if (req->actual == 0)
 			goto requeue_req;
 
-		pr_debug("rx %p %u\n", req, req->actual);
+		pr_debug("rx %pK %u\n", req, req->actual);
 		xfer = (req->actual < count) ? req->actual : count;
 		r = xfer;
 		if (copy_to_user(buf, req->buf, xfer))
@@ -721,16 +720,16 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 	}
 
 	while (count > 0) {
-		if (!dev->online) {
+		/* get an idle tx request to use */
+		req = 0;
+		ret = wait_event_interruptible(dev->write_wq,
+			((req = req_get(dev, &dev->tx_idle)) || !dev->online));
+		if (!dev->online || dev->disconnected) {
 			pr_debug("acc_write dev->error\n");
 			r = -EIO;
 			break;
 		}
 
-		/* get an idle tx request to use */
-		req = 0;
-		ret = wait_event_interruptible(dev->write_wq,
-			((req = req_get(dev, &dev->tx_idle)) || !dev->online));
 		if (!req) {
 			r = ret;
 			break;
@@ -981,6 +980,8 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			memset(dev->serial, 0, sizeof(dev->serial));
 			dev->start_requested = 0;
 			dev->audio_mode = 0;
+			strlcpy(dev->manufacturer, "Android", ACC_STRING_SIZE);
+			strlcpy(dev->model, "Android", ACC_STRING_SIZE);
 		}
 	}
 
@@ -1034,7 +1035,7 @@ __acc_function_bind(struct usb_configuration *c,
 	int			id;
 	int			ret;
 
-	DBG(cdev, "acc_function_bind dev: %p\n", dev);
+	DBG(cdev, "acc_function_bind dev: %pK\n", dev);
 
 	if (configfs) {
 		if (acc_string_defs[INTERFACE_STRING_INDEX].id == 0) {
@@ -1214,7 +1215,7 @@ static void acc_hid_work(struct work_struct *data)
 	list_for_each_safe(entry, temp, &new_list) {
 		hid = list_entry(entry, struct acc_hid_dev, list);
 		if (acc_hid_init(hid)) {
-			pr_err("can't add HID device %p\n", hid);
+			pr_err("can't add HID device %pK\n", hid);
 			acc_hid_delete(hid);
 		} else {
 			spin_lock_irqsave(&dev->lock, flags);

@@ -100,6 +100,10 @@ static struct elevator_type *elevator_find(const char *name, bool mq)
 {
 	struct elevator_type *e;
 
+	/* Forbid init from changing I/O scheduler by default */
+	if (!strncmp(current->comm, "init", sizeof("init")))
+		return NULL;
+
 	list_for_each_entry(e, &elv_list, list) {
 		if (elevator_match(e, name) && (mq == e->uses_mq))
 			return e;
@@ -224,8 +228,6 @@ int elevator_init(struct request_queue *q)
 							chosen_elevator);
 	}
 
-	if (!e)
-		e = elevator_get(q, CONFIG_DEFAULT_IOSCHED, false);
 	if (!e) {
 		printk(KERN_ERR
 			"Default I/O scheduler not found. Using noop.\n");
@@ -354,68 +356,6 @@ struct request *elv_rb_find(struct rb_root *root, sector_t sector)
 	return NULL;
 }
 EXPORT_SYMBOL(elv_rb_find);
-
-/*
- * Insert rq into dispatch queue of q.  Queue lock must be held on
- * entry.  rq is sort instead into the dispatch queue. To be used by
- * specific elevators.
- */
-void elv_dispatch_sort(struct request_queue *q, struct request *rq)
-{
-	sector_t boundary;
-	struct list_head *entry;
-
-	if (q->last_merge == rq)
-		q->last_merge = NULL;
-
-	elv_rqhash_del(q, rq);
-
-	q->nr_sorted--;
-
-	boundary = q->end_sector;
-	list_for_each_prev(entry, &q->queue_head) {
-		struct request *pos = list_entry_rq(entry);
-
-		if (req_op(rq) != req_op(pos))
-			break;
-		if (rq_data_dir(rq) != rq_data_dir(pos))
-			break;
-		if (pos->rq_flags & (RQF_STARTED | RQF_SOFTBARRIER))
-			break;
-		if (blk_rq_pos(rq) >= boundary) {
-			if (blk_rq_pos(pos) < boundary)
-				continue;
-		} else {
-			if (blk_rq_pos(pos) >= boundary)
-				break;
-		}
-		if (blk_rq_pos(rq) >= blk_rq_pos(pos))
-			break;
-	}
-
-	list_add(&rq->queuelist, entry);
-}
-EXPORT_SYMBOL(elv_dispatch_sort);
-
-/*
- * Insert rq into dispatch queue of q.  Queue lock must be held on
- * entry.  rq is added to the back of the dispatch queue. To be used by
- * specific elevators.
- */
-void elv_dispatch_add_tail(struct request_queue *q, struct request *rq)
-{
-	if (q->last_merge == rq)
-		q->last_merge = NULL;
-
-	elv_rqhash_del(q, rq);
-
-	q->nr_sorted--;
-
-	q->end_sector = rq_end_sector(rq);
-	q->boundary_rq = rq;
-	list_add_tail(&rq->queuelist, &q->queue_head);
-}
-EXPORT_SYMBOL(elv_dispatch_add_tail);
 
 enum elv_merge elv_merge(struct request_queue *q, struct request **req,
 		struct bio *bio)
@@ -560,15 +500,22 @@ void elv_bio_merged(struct request_queue *q, struct request *rq,
 #ifdef CONFIG_PM
 static void blk_pm_requeue_request(struct request *rq)
 {
-	if (rq->q->dev && !(rq->rq_flags & RQF_PM))
+	if (rq->q->dev && !(rq->rq_flags & RQF_PM) &&
+	    (rq->rq_flags & (RQF_PM_ADDED | RQF_FLUSH_SEQ))) {
+		rq->rq_flags &= ~RQF_PM_ADDED;
 		rq->q->nr_pending--;
+	}
 }
 
 static void blk_pm_add_request(struct request_queue *q, struct request *rq)
 {
-	if (q->dev && !(rq->rq_flags & RQF_PM) && q->nr_pending++ == 0 &&
-	    (q->rpm_status == RPM_SUSPENDED || q->rpm_status == RPM_SUSPENDING))
-		pm_request_resume(q->dev);
+	if (q->dev && !(rq->rq_flags & RQF_PM)) {
+		rq->rq_flags |= RQF_PM_ADDED;
+		if (q->nr_pending++ == 0 &&
+		    (q->rpm_status == RPM_SUSPENDED ||
+		     q->rpm_status == RPM_SUSPENDING))
+			pm_request_resume(q->dev);
+	}
 }
 #else
 static inline void blk_pm_requeue_request(struct request *rq) {}
@@ -854,6 +801,8 @@ int elv_register_queue(struct request_queue *q)
 		e->registered = 1;
 		if (!e->uses_mq && e->type->ops.sq.elevator_registered_fn)
 			e->type->ops.sq.elevator_registered_fn(q);
+		else if (e->uses_mq && e->type->ops.mq.elevator_registered_fn)
+			e->type->ops.mq.elevator_registered_fn(q);
 	}
 	return error;
 }
@@ -898,12 +847,6 @@ int elv_register(struct elevator_type *e)
 	}
 	list_add_tail(&e->list, &elv_list);
 	spin_unlock(&elv_list_lock);
-
-	/* print pretty message */
-	if (elevator_match(e, chosen_elevator) ||
-			(!*chosen_elevator &&
-			 elevator_match(e, CONFIG_DEFAULT_IOSCHED)))
-				def = " (default)";
 
 	printk(KERN_INFO "io scheduler %s registered%s\n", e->elevator_name,
 								def);
@@ -983,10 +926,16 @@ int elevator_init_mq(struct request_queue *q)
 	if (unlikely(q->elevator))
 		goto out;
 
-	e = elevator_get(q, "mq-deadline", false);
+		if (IS_ENABLED(CONFIG_BFQ_DEFAULT)) {
+			e = elevator_get(q, "bfq", false);
+		} else if (IS_ENABLED(CONFIG_MQ_KYBER_DEFAULT)) {
+			e = elevator_get(q, "kyber", false);
+		} else {
+			e = elevator_get(q, "mq-deadline", false);
+		}
+
 	if (!e)
 		goto out;
-
 	err = blk_mq_init_sched(q, e);
 	if (err)
 		elevator_put(e);

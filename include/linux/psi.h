@@ -29,6 +29,9 @@ void psi_trigger_destroy(struct psi_trigger *t);
 __poll_t psi_trigger_poll(void **trigger_ptr, struct file *file,
 			poll_table *wait);
 
+void psi_emergency_trigger(void);
+bool psi_is_trigger_active(void);
+
 #ifdef CONFIG_CGROUPS
 int psi_cgroup_alloc(struct cgroup *cgrp);
 void psi_cgroup_free(struct cgroup *cgrp);
@@ -41,6 +44,12 @@ static inline void psi_init(void) {}
 
 static inline void psi_memstall_enter(unsigned long *flags) {}
 static inline void psi_memstall_leave(unsigned long *flags) {}
+
+static inline void psi_emergency_trigger(void){}
+static inline bool psi_is_trigger_active(void)
+{
+	return false;
+}
 
 #ifdef CONFIG_CGROUPS
 static inline int psi_cgroup_alloc(struct cgroup *cgrp)

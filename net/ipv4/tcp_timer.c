@@ -39,13 +39,45 @@ static u32 tcp_clamp_rto_to_user_timeout(const struct sock *sk)
 	return min_t(u32, icsk->icsk_rto, msecs_to_jiffies(remaining));
 }
 
+static void set_tcp_default(void)
+{
+	sysctl_tcp_delack_seg = TCP_DELACK_SEG;
+}
+
+/*sysctl handler for tcp_ack realted master control */
+int tcp_proc_delayed_ack_control(struct ctl_table *table, int write,
+				 void __user *buffer, size_t *length,
+				 loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, length, ppos);
+
+	/* The ret value will be 0 if the input validation is successful
+	 * and the values are written to sysctl table. If not, the stack
+	 * will continue to work with currently configured values
+	 */
+	return ret;
+}
+
+/*sysctl handler for tcp_ack realted master control */
+int tcp_use_userconfig_sysctl_handler(struct ctl_table *table, int write,
+				      void __user *buffer, size_t *length,
+				      loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, length, ppos);
+
+	if (write && ret == 0) {
+		if (!sysctl_tcp_use_userconfig)
+			set_tcp_default();
+	}
+	return ret;
+}
+
 /**
  *  tcp_write_err() - close socket and save error info
  *  @sk:  The socket the error has appeared on.
  *
  *  Returns: Nothing (void)
  */
-
 static void tcp_write_err(struct sock *sk)
 {
 	sk->sk_err = sk->sk_err_soft ? : ETIMEDOUT;
@@ -411,39 +443,6 @@ static void tcp_fastopen_synack_timer(struct sock *sk)
 			  TCP_TIMEOUT_INIT << req->num_timeout, TCP_RTO_MAX);
 }
 
-static bool tcp_rtx_probe0_timed_out(const struct sock *sk,
-				     const struct sk_buff *skb)
-{
-	const struct inet_connection_sock *icsk = inet_csk(sk);
-	u32 user_timeout = READ_ONCE(icsk->icsk_user_timeout);
-	const struct tcp_sock *tp = tcp_sk(sk);
-	int timeout = TCP_RTO_MAX * 2;
-	u32 rtx_delta;
-	s32 rcv_delta;
-
-	rtx_delta = (u32)msecs_to_jiffies(tcp_time_stamp(tp) -
-			(tp->retrans_stamp ?: tcp_skb_timestamp(skb)));
-
-	if (user_timeout) {
-		/* If user application specified a TCP_USER_TIMEOUT,
-		 * it does not want win 0 packets to 'reset the timer'
-		 * while retransmits are not making progress.
-		 */
-		if (rtx_delta > user_timeout)
-			return true;
-		timeout = min_t(u32, timeout, msecs_to_jiffies(user_timeout));
-	}
-
-	/* Note: timer interrupt might have been delayed by at least one jiffy,
-	 * and tp->rcv_tstamp might very well have been written recently.
-	 * rcv_delta can thus be negative.
-	 */
-	rcv_delta = icsk->icsk_timeout - tp->rcv_tstamp;
-	if (rcv_delta <= timeout)
-		return false;
-
-	return rtx_delta > timeout;
-}
 
 /**
  *  tcp_retransmit_timer() - The TCP retransmit timeout handler
@@ -461,7 +460,6 @@ void tcp_retransmit_timer(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct net *net = sock_net(sk);
 	struct inet_connection_sock *icsk = inet_csk(sk);
-	struct sk_buff *skb;
 
 	if (tp->fastopen_rsk) {
 		WARN_ON_ONCE(sk->sk_state != TCP_SYN_RECV &&
@@ -472,13 +470,10 @@ void tcp_retransmit_timer(struct sock *sk)
 		 */
 		return;
 	}
-
-	if (!tp->packets_out)
+	if (!tp->packets_out || WARN_ON_ONCE(tcp_rtx_queue_empty(sk)))
 		return;
 
-	skb = tcp_rtx_queue_head(sk);
-	if (WARN_ON_ONCE(!skb))
-		return;
+	tp->tlp_high_seq = 0;
 
 	if (!tp->snd_wnd && !sock_flag(sk, SOCK_DEAD) &&
 	    !((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))) {
@@ -504,12 +499,12 @@ void tcp_retransmit_timer(struct sock *sk)
 					    tp->snd_una, tp->snd_nxt);
 		}
 #endif
-		if (tcp_rtx_probe0_timed_out(sk, skb)) {
+		if (tcp_jiffies32 - tp->rcv_tstamp > TCP_RTO_MAX) {
 			tcp_write_err(sk);
 			goto out;
 		}
 		tcp_enter_loss(sk);
-		tcp_retransmit_skb(sk, skb, 1);
+		tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1);
 		__sk_dst_reset(sk);
 		goto out_reset_timer;
 	}
@@ -541,14 +536,13 @@ void tcp_retransmit_timer(struct sock *sk)
 
 	tcp_enter_loss(sk);
 
+	icsk->icsk_retransmits++;
 	if (tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1) > 0) {
 		/* Retransmission failed because of local congestion,
-		 * do not backoff.
+		 * Let senders fight for local resources conservatively.
 		 */
-		if (!icsk->icsk_retransmits)
-			icsk->icsk_retransmits = 1;
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-					  min(icsk->icsk_rto, TCP_RESOURCE_PROBE_INTERVAL),
+					  TCP_RESOURCE_PROBE_INTERVAL,
 					  TCP_RTO_MAX);
 		goto out;
 	}
@@ -569,7 +563,6 @@ void tcp_retransmit_timer(struct sock *sk)
 	 * the 120 second clamps though!
 	 */
 	icsk->icsk_backoff++;
-	icsk->icsk_retransmits++;
 
 out_reset_timer:
 	/* If stream is thin, use linear timeouts. Since 'icsk_backoff' is

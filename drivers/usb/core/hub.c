@@ -51,6 +51,8 @@
 #define USB_TP_TRANSMISSION_DELAY_MAX	65535	/* ns */
 #define USB_PING_RESPONSE_TIME		400	/* ns */
 
+extern int deny_new_usb;
+
 /* Protect struct usb_device->state and ->children members
  * Note: Both are also protected by ->dev.sem, except that ->state can
  * change to USB_STATE_NOTATTACHED even when the semaphore isn't held. */
@@ -62,6 +64,11 @@ static void hub_event(struct work_struct *work);
 
 /* synchronize hub-port add/remove and peering operations */
 DEFINE_MUTEX(usb_port_peer_mutex);
+
+static bool skip_extended_resume_delay = 1;
+module_param(skip_extended_resume_delay, bool, 0644);
+MODULE_PARM_DESC(skip_extended_resume_delay,
+		"removes extra delay added to finish bus resume");
 
 /* cycle leds on hubs that aren't blinking for attention */
 static bool blinkenlights;
@@ -663,6 +670,12 @@ void usb_kick_hub_wq(struct usb_device *hdev)
 	if (hub)
 		kick_hub_wq(hub);
 }
+
+void usb_flush_hub_wq(void)
+{
+	flush_workqueue(hub_wq);
+}
+EXPORT_SYMBOL(usb_flush_hub_wq);
 
 /*
  * Let the USB core know that a USB 3.0 device has sent a Function Wake Device
@@ -3565,7 +3578,10 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 		/* drive resume for USB_RESUME_TIMEOUT msec */
 		dev_dbg(&udev->dev, "usb %sresume\n",
 				(PMSG_IS_AUTO(msg) ? "auto-" : ""));
-		msleep(USB_RESUME_TIMEOUT);
+		if (!skip_extended_resume_delay ||
+				udev->parent != udev->bus->root_hub)
+			usleep_range(USB_RESUME_TIMEOUT * 1000,
+					(USB_RESUME_TIMEOUT + 1) * 1000);
 
 		/* Virtual root hubs can trigger on GET_PORT_STATUS to
 		 * stop resume signaling.  Then finish the resume
@@ -3588,7 +3604,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 		}
 
 		/* TRSMRCY = 10 msec */
-		msleep(10);
+		usleep_range(10000, 10500);
 	}
 
 	if (udev->persist_enabled)
@@ -5062,6 +5078,11 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 			goto done;
 		return;
 	}
+	if (deny_new_usb) {
+		dev_err(&port_dev->dev, "denied insert of USB device on port %d\n", port1);
+		goto done;
+	}
+
 	if (hub_is_superspeed(hub->hdev))
 		unit_load = 150;
 	else
