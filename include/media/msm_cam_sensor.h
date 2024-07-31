@@ -19,8 +19,6 @@
 
 #include <linux/compat.h>
 
-#define SECURE_CAM_RST_MODULES
-
 #ifdef CONFIG_COMPAT
 
 struct msm_sensor_power_setting32 {
@@ -41,21 +39,6 @@ struct msm_sensor_power_setting_array32 {
 	uint16_t size_down;
 };
 
-struct msm_camera_i2c_reg_setting32 {
-	compat_uptr_t reg_setting;
-	uint16_t size;
-	enum msm_camera_i2c_reg_addr_type addr_type;
-	enum msm_camera_i2c_data_type data_type;
-	uint16_t delay;
-};
-
-struct msm_sensor_id_info_t32 {
-	unsigned short sensor_id_reg_addr;
-	unsigned short sensor_id;
-	unsigned short sensor_id_mask;
-	struct msm_camera_i2c_reg_setting32 setting;
-};
-
 struct msm_camera_sensor_slave_info32 {
 	char sensor_name[32];
 	char eeprom_name[32];
@@ -66,7 +49,7 @@ struct msm_camera_sensor_slave_info32 {
 	uint16_t slave_addr;
 	enum i2c_freq_mode_t i2c_freq_mode;
 	enum msm_camera_i2c_reg_addr_type addr_type;
-	struct msm_sensor_id_info_t32 sensor_id_info;
+	struct msm_sensor_id_info_t sensor_id_info;
 	struct msm_sensor_power_setting_array32 power_setting_array;
 	uint8_t  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
@@ -87,9 +70,6 @@ struct msm_camera_csid_params32 {
 	uint32_t csi_clk;
 	struct msm_camera_csid_lut_params32 lut_params;
 	uint8_t csi_3p_sel;
-	uint8_t is_secure;
-	uint32_t topology;
-	uint8_t is_streamon;
 };
 
 struct msm_camera_csi2_params32 {
@@ -158,6 +138,14 @@ struct msm_camera_i2c_seq_reg_setting32 {
 	compat_uptr_t reg_setting;
 	uint16_t size;
 	enum msm_camera_i2c_reg_addr_type addr_type;
+	uint16_t delay;
+};
+
+struct msm_camera_i2c_reg_setting32 {
+	compat_uptr_t reg_setting;
+	uint16_t size;
+	enum msm_camera_i2c_reg_addr_type addr_type;
+	enum msm_camera_i2c_data_type data_type;
 	uint16_t delay;
 };
 

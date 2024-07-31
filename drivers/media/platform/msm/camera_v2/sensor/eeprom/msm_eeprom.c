@@ -57,7 +57,12 @@ static int msm_get_read_mem_size
 		}
 		for (i = 0; i < eeprom_map->memory_map_size; i++) {
 			if (eeprom_map->mem_settings[i].i2c_operation ==
+#ifdef CONFIG_MACH_ASUS_X00TD
+				MSM_CAM_READ || eeprom_map->mem_settings[i].i2c_operation ==
+				MSM_CAM_SINGLE_LOOP_READ) {
+#else
 				MSM_CAM_READ) {
+#endif
 				size += eeprom_map->mem_settings[i].reg_data;
 			}
 		}
@@ -409,6 +414,29 @@ static int eeprom_parse_memory_map(struct msm_eeprom_ctrl_t *e_ctrl,
 				memptr += eeprom_map->mem_settings[i].reg_data;
 			}
 			break;
+#ifdef CONFIG_MACH_ASUS_X00TD
+			case MSM_CAM_SINGLE_LOOP_READ: {
+				uint16_t m;
+				uint16_t read_val = 0;
+				e_ctrl->i2c_client.addr_type =
+					eeprom_map->mem_settings[i].addr_type;
+				for (m = 0; m < eeprom_map->mem_settings[i].reg_data;m++) {
+					rc = e_ctrl->i2c_client.i2c_func_tbl->
+						i2c_read(&(e_ctrl->i2c_client),
+					eeprom_map->mem_settings[i].reg_addr,
+						&read_val,
+					eeprom_map->mem_settings[i].data_type);
+					if (rc < 0) {
+						pr_err("%s: read failed\n",__func__);
+						goto clean_up;
+					}
+					*memptr = (uint8_t) read_val;
+					memptr++;
+				}
+				msleep(eeprom_map->mem_settings[i].delay);
+			}
+			break;
+#endif
 			default:
 				pr_err("%s: %d Invalid i2c operation LC:%d\n",
 					__func__, __LINE__, i);
@@ -1026,7 +1054,7 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 	snprintf(e_ctrl->msm_sd.sd.name,
 		ARRAY_SIZE(e_ctrl->msm_sd.sd.name), "msm_eeprom");
 	media_entity_pads_init(&e_ctrl->msm_sd.sd.entity, 0, NULL);
-	e_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_EEPROM;
+	e_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_EEPROM;
 	msm_sd_register(&e_ctrl->msm_sd);
 	e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
 	pr_err("%s success result=%d X\n", __func__, rc);
@@ -1320,7 +1348,7 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 	e_ctrl->msm_sd.sd.internal_ops = &msm_eeprom_internal_ops;
 	e_ctrl->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	media_entity_pads_init(&e_ctrl->msm_sd.sd.entity, 0, NULL);
-	e_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_EEPROM;
+	e_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_EEPROM;
 	msm_sd_register(&e_ctrl->msm_sd);
 	e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
 	CDBG("%s success result=%d supported=%x X\n", __func__, rc,
@@ -1860,7 +1888,7 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	snprintf(e_ctrl->msm_sd.sd.name,
 		ARRAY_SIZE(e_ctrl->msm_sd.sd.name), "msm_eeprom");
 	media_entity_pads_init(&e_ctrl->msm_sd.sd.entity, 0, NULL);
-	e_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_EEPROM;
+	e_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_EEPROM;
 	msm_sd_register(&e_ctrl->msm_sd);
 
 #ifdef CONFIG_COMPAT

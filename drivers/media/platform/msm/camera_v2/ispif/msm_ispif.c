@@ -47,7 +47,7 @@
 #define ISPIF_INTF_CMD_DISABLE_IMMEDIATELY    0x02
 
 #define ISPIF_TIMEOUT_SLEEP_US                1000
-#define ISPIF_TIMEOUT_ALL_US               1000000
+#define ISPIF_TIMEOUT_ALL_US              10000000
 #define ISPIF_SOF_DEBUG_COUNT                    5
 
 /* 3D Threshold value according guidelines for line width 1280 */
@@ -2080,7 +2080,7 @@ static int ispif_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, &ispif->msm_sd.sd);
 
 	media_entity_pads_init(&ispif->msm_sd.sd.entity, 0, NULL);
-	ispif->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_ISPIF;
+	ispif->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_ISPIF;
 	ispif->msm_sd.sd.entity.name = pdev->name;
 	ispif->msm_sd.close_seq = MSM_SD_CLOSE_1ST_CATEGORY | 0x1;
 	rc = msm_sd_register(&ispif->msm_sd);

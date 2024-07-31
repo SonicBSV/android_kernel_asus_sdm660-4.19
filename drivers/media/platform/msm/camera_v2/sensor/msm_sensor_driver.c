@@ -20,6 +20,19 @@
 #include "msm_camera_dt_util.h"
 #include "msm_sensor_driver.h"
 
+#ifdef CONFIG_MACH_ASUS_X00TD
+#undef CAM_MODULE_INFO_CONFIG
+#define CAM_MODULE_INFO_CONFIG 1
+
+#if CAM_MODULE_INFO_CONFIG
+#include <linux/proc_fs.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/uaccess.h>
+#include <linux/slab.h>
+#endif
+#endif
+
 /* Logging macro */
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -79,6 +92,45 @@ static struct v4l2_subdev_info msm_sensor_driver_subdev_info[] = {
 	},
 };
 
+#ifdef CONFIG_MACH_ASUS_X00TD
+#if CAM_MODULE_INFO_CONFIG
+static char *cameraModuleInfo[3] = {NULL, NULL, NULL};
+
+#define CAM_MODULE_INFO "cameraModuleInfo"
+
+static struct proc_dir_entry *proc_entry;
+
+static ssize_t cameraModuleInfo_read
+	(struct file *file, char __user *page, size_t size, loff_t *ppos)
+{
+	char buf[150] = {0};
+	int rc = 0;
+	snprintf(buf, 150,
+			"rear camera:%s\nfront camera:%s\nrear sub camera:%s\n",
+			cameraModuleInfo[0],
+			cameraModuleInfo[1],
+			cameraModuleInfo[2]);
+
+	rc = simple_read_from_buffer(page, size, ppos, buf, strlen(buf));
+
+	return rc;
+}
+
+static ssize_t cameraModuleInfo_write
+	(struct file *filp, const char __user *buffer,
+	size_t count, loff_t *off)
+{
+	return 0;
+}
+
+static const struct file_operations cameraModuleInfo_fops = {
+	.owner = THIS_MODULE,
+	.read = cameraModuleInfo_read,
+	.write = cameraModuleInfo_write,
+};
+#endif
+#endif
+
 static int32_t msm_sensor_driver_create_i2c_v4l_subdev
 			(struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -104,7 +156,7 @@ static int32_t msm_sensor_driver_create_i2c_v4l_subdev
 	v4l2_set_subdevdata(&s_ctrl->msm_sd.sd, client);
 	s_ctrl->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	media_entity_pads_init(&s_ctrl->msm_sd.sd.entity, 0, NULL);
-	s_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_SENSOR;
+	s_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_SENSOR;
 	s_ctrl->msm_sd.sd.entity.name =	s_ctrl->msm_sd.sd.name;
 	s_ctrl->sensordata->sensor_info->session_id = session_id;
 	s_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x3;
@@ -148,7 +200,7 @@ static int32_t msm_sensor_driver_create_v4l_subdev
 	v4l2_set_subdevdata(&s_ctrl->msm_sd.sd, s_ctrl->pdev);
 	s_ctrl->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	media_entity_pads_init(&s_ctrl->msm_sd.sd.entity, 0, NULL);
-	s_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_SENSOR;
+	s_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_SENSOR;
 	s_ctrl->msm_sd.sd.entity.name = s_ctrl->msm_sd.sd.name;
 	s_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x3;
 	rc = msm_sd_register(&s_ctrl->msm_sd);
@@ -680,6 +732,7 @@ static int32_t msm_sensor_get_power_settings(void *setting,
 	rc = msm_sensor_get_power_up_settings(setting, slave_info, power_info);
 	if (rc < 0) {
 		pr_err("failed\n");
+		kfree(power_info->power_setting);
 		return -EINVAL;
 	}
 
@@ -758,8 +811,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	unsigned long                        mount_pos = 0;
 	uint32_t                             is_yuv;
-	struct msm_camera_i2c_reg_array     *reg_setting = NULL;
-	struct msm_sensor_id_info_t         *id_info = NULL;
 
 	/* Validate input parameters */
 	if (!setting) {
@@ -808,56 +859,7 @@ int32_t msm_sensor_driver_probe(void *setting,
 		slave_info->camera_id = slave_info32->camera_id;
 
 		slave_info->i2c_freq_mode = slave_info32->i2c_freq_mode;
-		slave_info->sensor_id_info.sensor_id_reg_addr =
-			slave_info32->sensor_id_info.sensor_id_reg_addr;
-		slave_info->sensor_id_info.sensor_id_mask =
-			slave_info32->sensor_id_info.sensor_id_mask;
-		slave_info->sensor_id_info.sensor_id =
-			slave_info32->sensor_id_info.sensor_id;
-
-		slave_info->sensor_id_info.setting.addr_type =
-			slave_info32->sensor_id_info.setting.addr_type;
-		slave_info->sensor_id_info.setting.data_type =
-			slave_info32->sensor_id_info.setting.data_type;
-		slave_info->sensor_id_info.setting.delay =
-			slave_info32->sensor_id_info.setting.delay;
-		slave_info->sensor_id_info.setting.size =
-			slave_info32->sensor_id_info.setting.size;
-
-		if (!slave_info->sensor_id_info.setting.size ||
-			(slave_info->sensor_id_info.setting.size >
-				I2C_REG_DATA_MAX)) {
-			CDBG("%s:No writes needed to probe\n", __func__);
-			slave_info->sensor_id_info.setting.reg_setting = NULL;
-		} else {
-			id_info = &(slave_info->sensor_id_info);
-			reg_setting =
-				kzalloc(id_info->setting.size *
-					(sizeof
-					(struct msm_camera_i2c_reg_array)),
-					GFP_KERNEL);
-			if (!reg_setting) {
-				kfree(slave_info32);
-				rc = -ENOMEM;
-				goto free_slave_info;
-			}
-			if (copy_from_user(reg_setting,
-				(void __user *)
-				compat_ptr(slave_info32->sensor_id_info
-				.setting.reg_setting),
-				slave_info->sensor_id_info.setting.size *
-				sizeof(struct msm_camera_i2c_reg_array))) {
-				pr_err("%s:%d: sensor id info copy failed\n",
-					__func__, __LINE__);
-				kfree(reg_setting);
-				kfree(slave_info32);
-				rc = -EFAULT;
-				goto free_slave_info;
-			}
-
-			slave_info->sensor_id_info.setting.reg_setting =
-				reg_setting;
-		}
+		slave_info->sensor_id_info = slave_info32->sensor_id_info;
 
 		slave_info->slave_addr = slave_info32->slave_addr;
 		slave_info->power_setting_array.size =
@@ -892,37 +894,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 			pr_err("failed: copy_from_user\n");
 			rc = -EFAULT;
 			goto free_slave_info;
-		}
-		if (!slave_info->sensor_id_info.setting.size ||
-			slave_info->sensor_id_info.setting.size >
-			I2C_REG_DATA_MAX) {
-			CDBG("%s:No writes needed to probe\n", __func__);
-			slave_info->sensor_id_info.setting.reg_setting = NULL;
-		} else {
-			id_info = &(slave_info->sensor_id_info);
-			reg_setting =
-				kzalloc(id_info->setting.size *
-					(sizeof
-					(struct msm_camera_i2c_reg_array)),
-					GFP_KERNEL);
-			if (!reg_setting) {
-				rc = -ENOMEM;
-				goto free_slave_info;
-			}
-			if (copy_from_user(reg_setting,
-				(void __user *)
-				slave_info->sensor_id_info.setting.reg_setting,
-				slave_info->sensor_id_info.setting.size *
-				sizeof(struct msm_camera_i2c_reg_array))) {
-				pr_err("%s:%d: sensor id info copy failed\n",
-					__func__, __LINE__);
-				kfree(reg_setting);
-				rc = -EFAULT;
-				goto free_slave_info;
-			}
-
-			slave_info->sensor_id_info.setting.reg_setting =
-				reg_setting;
 		}
 	}
 
@@ -1028,7 +999,7 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	camera_info = kzalloc(sizeof(struct msm_camera_slave_info), GFP_KERNEL);
 	if (!camera_info)
-		goto free_slave_info;
+		goto free_power_settings;
 
 	s_ctrl->sensordata->slave_info = camera_info;
 
@@ -1038,7 +1009,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 		slave_info->sensor_id_info.sensor_id_reg_addr;
 	camera_info->sensor_id = slave_info->sensor_id_info.sensor_id;
 	camera_info->sensor_id_mask = slave_info->sensor_id_info.sensor_id_mask;
-	camera_info->setting = &(slave_info->sensor_id_info.setting);
 
 	/* Fill CCI master, slave address and CCI default params */
 	if (!s_ctrl->sensor_i2c_client) {
@@ -1140,6 +1110,12 @@ CSID_TG:
 
 	pr_err("%s probe succeeded\n", slave_info->sensor_name);
 
+#ifdef CONFIG_MACH_ASUS_X00TD
+#if CAM_MODULE_INFO_CONFIG
+	cameraModuleInfo[slave_info->camera_id] = slave_info->sensor_name;
+#endif
+#endif
+
 	s_ctrl->bypass_video_node_creation =
 		slave_info->bypass_video_node_creation;
 
@@ -1198,8 +1174,10 @@ camera_power_down:
 	s_ctrl->func_tbl->sensor_power_down(s_ctrl);
 free_camera_info:
 	kfree(camera_info);
+free_power_settings:
+	kfree(s_ctrl->sensordata->power_info.power_setting);
+	kfree(s_ctrl->sensordata->power_info.power_down_setting);
 free_slave_info:
-	kfree(slave_info->sensor_id_info.setting.reg_setting);
 	kfree(slave_info);
 	return rc;
 }
@@ -1570,6 +1548,19 @@ static int __init msm_sensor_driver_init(void)
 	if (rc)
 		pr_err("%s i2c_add_driver failed rc = %d\n",  __func__, rc);
 
+#ifdef CONFIG_MACH_ASUS_X00TD
+#if CAM_MODULE_INFO_CONFIG
+	proc_entry = proc_create(CAM_MODULE_INFO,
+							0664, NULL,
+							&cameraModuleInfo_fops);
+
+	if (NULL == proc_entry) {
+		pr_err("Create proc/cameraModuleInfo failed\n");
+		remove_proc_entry(CAM_MODULE_INFO, NULL);
+	}
+#endif
+#endif
+
 	return rc;
 }
 
@@ -1578,6 +1569,13 @@ static void __exit msm_sensor_driver_exit(void)
 	CDBG("Enter");
 	platform_driver_unregister(&msm_sensor_platform_driver);
 	i2c_del_driver(&msm_sensor_driver_i2c);
+
+#ifdef CONFIG_MACH_ASUS_X00TD
+#if CAM_MODULE_INFO_CONFIG
+	remove_proc_entry(CAM_MODULE_INFO, NULL);
+#endif
+#endif
+
 }
 
 module_init(msm_sensor_driver_init);
