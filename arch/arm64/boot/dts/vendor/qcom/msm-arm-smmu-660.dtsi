@@ -11,7 +11,6 @@
 		#iommu-cells = <1>;
 		qcom,skip-init;
 		qcom,use-3-lvl-tables;
-		qcom,regulator-names = "vdd";
 		#global-interrupts = <2>;
 		interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 231 IRQ_TYPE_LEVEL_HIGH>,
@@ -126,7 +125,14 @@
 			      "mmss_bimc_smmu_ahb_clk",
 			      "mmss_bimc_smmu_axi_clk";
 		#clock-cells = <1>;
-		qcom,bus-master-id = <MSM_BUS_MNOC_BIMC_MAS>;
+		qcom,msm-bus,name = "smmu-bus-client-mmss";
+		qcom,msm-bus,num-cases = <2>;
+		qcom,msm-bus,active-only;
+		qcom,msm-bus,num-paths = <2>;
+		/* ahb_clk_src, mmssnoc_axi_clk */
+		qcom,msm-bus,vectors-KBps =
+				<102 722 0 0>, <29 512 0 0>,
+				<102 722 0 1000>, <29 512 0 1000>;
 	};
 
 	kgsl_smmu: arm,smmu-kgsl@5040000 {
@@ -135,20 +141,15 @@
 		#iommu-cells = <1>;
 		qcom,dynamic;
 		qcom,use-3-lvl-tables;
+		qcom,skip-init;
 		qcom,disable-atos;
 		qcom,regulator-names = "vdd";
-		#global-interrupts = <2>;
-		interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 231 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
+		#global-interrupts = <0>;
+		interrupts = <GIC_SPI 329 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 331 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 349 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 350 IRQ_TYPE_LEVEL_HIGH>;
-		qcom,deferred-regulator-disable-delay = <80>;
+			     <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
 		vdd-supply = <&gdsc_gpu_cx>;
 		clocks = <&clock_gcc GCC_GPU_CFG_AHB_CLK>,
 			 <&clock_gcc GCC_BIMC_GFX_CLK>,
