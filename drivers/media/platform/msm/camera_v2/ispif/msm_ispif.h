@@ -78,6 +78,5 @@ struct ispif_device {
 	int ispif_vdd_count;
 	struct regulator *vfe_vdd[ISPIF_VFE_VDD_INFO_MAX];
 	int vfe_vdd_count;
-	int stereo_configured[VFE_MAX];
 };
 #endif
