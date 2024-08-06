@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -42,7 +41,7 @@ void hdd_periodic_sta_stats_init(struct hdd_adapter *adapter)
 
 void hdd_periodic_sta_stats_display(struct hdd_context *hdd_ctx)
 {
-	struct hdd_adapter *adapter, *next_adapter = NULL;
+	struct hdd_adapter *adapter;
 	struct hdd_stats sta_stats;
 	struct hdd_config *hdd_cfg;
 	char *dev_name;
@@ -51,20 +50,17 @@ void hdd_periodic_sta_stats_display(struct hdd_context *hdd_ctx)
 	if (!hdd_ctx)
 		return;
 
-	hdd_for_each_adapter_dev_held_safe(hdd_ctx, adapter, next_adapter) {
+	hdd_for_each_adapter(hdd_ctx, adapter) {
 		should_log = false;
 
-		if (adapter->device_mode != QDF_STA_MODE) {
-			dev_put(adapter->dev);
+		if (adapter->device_mode != QDF_STA_MODE)
 			continue;
-		}
 
 		hdd_cfg = hdd_ctx->config;
 		qdf_mutex_acquire(&adapter->sta_periodic_stats_lock);
 
 		if (!adapter->is_sta_periodic_stats_enabled) {
 			qdf_mutex_release(&adapter->sta_periodic_stats_lock);
-			dev_put(adapter->dev);
 			continue;
 		}
 
@@ -93,7 +89,6 @@ void hdd_periodic_sta_stats_display(struct hdd_context *hdd_ctx)
 			hdd_nofl_info("%s: Rx DNS responses: %d", dev_name,
 				      sta_stats.hdd_dns_stats.rx_dns_rsp_count);
 		}
-		dev_put(adapter->dev);
 	}
 }
 

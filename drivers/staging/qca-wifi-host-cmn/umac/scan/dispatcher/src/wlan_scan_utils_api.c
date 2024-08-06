@@ -738,11 +738,6 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 				goto err;
 			scan_params->ie_list.fils_indication = (uint8_t *)ie;
 			break;
-		case WLAN_ELEMID_RSNXE:
-			if (!ie->ie_len)
-				goto err;
-			scan_params->ie_list.rsnxe = (uint8_t *)ie;
-			break;
 		case WLAN_ELEMID_EXTN_ELEM:
 			status = util_scan_parse_extn_ie(scan_params, ie);
 			if (QDF_IS_STATUS_ERROR(status))
@@ -801,8 +796,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	esp_ie = (struct wlan_esp_ie *)
 		util_scan_entry_esp_info(scan_entry);
 
-	// Ignore ESP_ID_EXTN element
-	total_elements  = esp_ie->esp_len - 1;
+	total_elements  = esp_ie->esp_len;
 	data = (uint8_t *)esp_ie + 3;
 	do_div(total_elements, ESP_INFORMATION_LIST_LENGTH);
 
@@ -812,7 +806,7 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 	}
 
 	for (i = 0; i < total_elements &&
-	     data < ((uint8_t *)esp_ie + esp_ie->esp_len); i++) {
+	     data < ((uint8_t *)esp_ie + esp_ie->esp_len + 3); i++) {
 		esp_info = (struct wlan_esp_info *)data;
 		if (esp_info->access_category == ESP_AC_BK) {
 			qdf_mem_copy(&esp_information->esp_info_AC_BK,
