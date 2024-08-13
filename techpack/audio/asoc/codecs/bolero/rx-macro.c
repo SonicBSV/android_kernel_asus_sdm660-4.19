@@ -1236,6 +1236,7 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 							   rx_priv->default_clk_id,
 							   rx_priv->clk_id,
 							   true);
+			rx_macro_core_vote(rx_priv, false);
 			if (ret < 0) {
 				dev_err(rx_priv->dev,
 					"%s: rx request clock enable failed\n",
@@ -1290,6 +1291,7 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 						 rx_priv->default_clk_id,
 						 rx_priv->clk_id,
 						 false);
+			rx_macro_core_vote(rx_priv, false);
 			rx_priv->clk_id = rx_priv->default_clk_id;
 		}
 	}
@@ -1409,11 +1411,11 @@ static int rx_macro_event_handler(struct snd_soc_component *component,
 				"%s, failed to enable clk, ret:%d\n",
 				__func__, ret);
 		} else {
-			rx_macro_core_vote(rx_priv, true);
 			bolero_clk_rsc_request_clock(rx_priv->dev,
 						rx_priv->default_clk_id,
 						RX_CORE_CLK, false);
 		}
+		rx_macro_core_vote(rx_priv, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
 		trace_printk("%s, enter SSR up\n", __func__);
@@ -2588,7 +2590,8 @@ static void rx_macro_hphdelay_lutbypass(struct snd_soc_component *component,
 	}
 
 	if (hph_lut_bypass_reg && SND_SOC_DAPM_EVENT_OFF(event)) {
-		snd_soc_component_update_bits(component,
+		if (!rx_priv->is_ear_mode_on)
+			snd_soc_component_update_bits(component,
 					BOLERO_CDC_RX_RX0_RX_PATH_CFG1,
 					0x02, 0x00);
 		snd_soc_component_update_bits(component, hph_lut_bypass_reg,
@@ -3678,22 +3681,25 @@ static const struct snd_soc_dapm_route rx_audio_map[] = {
 
 static int rx_macro_core_vote(void *handle, bool enable)
 {
+	int rc = 0;
 	struct rx_macro_priv *rx_priv = (struct rx_macro_priv *) handle;
 
 	if (rx_priv == NULL) {
 		pr_err("%s: rx priv data is NULL\n", __func__);
 		return -EINVAL;
 	}
+
 	if (enable) {
 		pm_runtime_get_sync(rx_priv->dev);
+		if (bolero_check_core_votes(rx_priv->dev))
+			rc = 0;
+		else
+			rc = -ENOTSYNC;
+	} else {
 		pm_runtime_put_autosuspend(rx_priv->dev);
 		pm_runtime_mark_last_busy(rx_priv->dev);
 	}
-
-	if (bolero_check_core_votes(rx_priv->dev))
-		return 0;
-	else
-		return -EINVAL;
+	return rc;
 }
 
 static int rx_swrm_clock(void *handle, bool enable)
