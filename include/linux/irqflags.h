@@ -59,7 +59,7 @@ do {						\
 
 # define lockdep_irq_work_enter(_flags)					\
 	  do {								\
-		  if (!((_flags) & IRQ_WORK_HARD_IRQ))			\	  
+		  if (!((_flags) & IRQ_WORK_HARD_IRQ))			\
 			current->irq_config = 1;			\
 	  } while (0)
 # define lockdep_irq_work_exit(_flags)					\
