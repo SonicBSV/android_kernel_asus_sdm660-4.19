@@ -53,6 +53,7 @@
 			sched-energy-costs = <&CPU_COST_0>;
 			qcom,lmh-dcvs = <&lmh_dcvs0>;
 			next-level-cache = <&L2_0>;
+                        #cooling-cells = <2>;
 			L2_0: l2-cache {
 				compatible = "arm,arch-cache";
 				cache-level = <2>;
@@ -133,6 +134,7 @@
 			sched-energy-costs = <&CPU_COST_1>;
 			qcom,lmh-dcvs = <&lmh_dcvs1>;
 			next-level-cache = <&L2_1>;
+                        #cooling-cells = <2>;
 			L2_1: l2-cache {
 				compatible = "arm,arch-cache";
 				cache-level = <2>;
