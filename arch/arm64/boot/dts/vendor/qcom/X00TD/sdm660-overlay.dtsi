@@ -11,6 +11,45 @@
  */
 
 / {
+cpus {
+	cpu@0 {
+		efficiency = <636>;
+		capacity-dmips-mhz = <636>;
+	};
+
+	cpu@4 {
+		efficiency = <1024>;
+		capacity-dmips-mhz = <1024>;
+	};
+};
+
+	energy_costs: energy-costs {
+		compatible = "sched-energy";
+
+		CPU_COST_0: core-cost0 {
+			busy-cost-data = <
+				 633600	 31
+				 902400	 52
+				1113600	 76
+				1401600	119
+				1536000	146
+				1747200	197
+				1843200	216
+			>;
+		};
+
+		CPU_COST_1: core-cost1 {
+			busy-cost-data = <
+				1113600	244
+				1401600	341
+				1747200	513
+				1958400	660
+				2150400	808
+				2208000	997
+			>;
+		};
+	};
+
 	reserved-memory {
 		ramoops {
 			compatible = "removed-dma-pool", "ramoops";
