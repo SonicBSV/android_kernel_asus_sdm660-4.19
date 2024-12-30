@@ -1,10 +1,24 @@
 /*
- * Copyright (C) 2014 NXP Semiconductors, All Rights Reserved.
+ * Copyright 2013-2017 NXP Semiconductors
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * tfaContainer.h
+ *
+ *  Created on: Sep 11, 2013
+ *      Author: wim
  */
 
 #ifndef TFACONTAINER_H_
@@ -36,14 +50,6 @@ enum tfa_error tfa_load_cnt(void *cnt, int length);
  * @return descriptor string
  */
 char *tfaContGetString(nxpTfaContainer_t *cnt, nxpTfaDescPtr_t *dsc);
-
-/**
-* Return the descriptor tfahal
-* @param cnt pointer to the container struct
-* @param dsc pointer to nxpTfa descriptor
-* @return descriptor tfahal
-*/
-char *tfa_cont_get_tfahal(nxpTfaContainer_t *cnt, nxpTfaDescPtr_t *dsc);
 
 /**
  * Gets the string for the given command type number

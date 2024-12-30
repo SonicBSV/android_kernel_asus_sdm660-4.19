@@ -5708,8 +5708,8 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		   (mi2s_dai_data->rx_dai.mi2s_dai_data.bitwidth !=
 		    mi2s_dai_data->tx_dai.mi2s_dai_data.bitwidth)) {
 			dev_err(dai->dev, "%s: Error mismatch in HW params\n"
-				"Tx sample_rate = %u bit_width = %hu\n"
-				"Rx sample_rate = %u bit_width = %hu\n"
+				"Tx sample_rate = %u bit_width = %u\n"
+				"Rx sample_rate = %u bit_width = %u\n"
 				, __func__,
 				mi2s_dai_data->tx_dai.mi2s_dai_data.rate,
 				mi2s_dai_data->tx_dai.mi2s_dai_data.bitwidth,
@@ -7494,7 +7494,6 @@ static struct platform_driver msm_dai_q6_dev = {
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_dev_dt_match,
 		.suppress_bind_attrs = true,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
@@ -7533,7 +7532,6 @@ static struct platform_driver msm_dai_q6 = {
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_dt_match,
 		.suppress_bind_attrs = true,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
@@ -7908,7 +7906,6 @@ static struct platform_driver msm_dai_tdm_q6 = {
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_tdm_dt_match,
 		.suppress_bind_attrs = true,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
@@ -12232,7 +12229,6 @@ static struct platform_driver msm_dai_q6_tdm_driver = {
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_tdm_dev_dt_match,
 		.suppress_bind_attrs = true,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 

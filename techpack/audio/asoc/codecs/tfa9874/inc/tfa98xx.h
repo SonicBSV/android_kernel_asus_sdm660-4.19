@@ -1,10 +1,17 @@
 /*
- * Copyright (C) 2014 NXP Semiconductors, All Rights Reserved.
+ * Copyright 2014-2017 NXP Semiconductors
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef __TFA98XX_INC__
@@ -115,7 +122,7 @@ struct tfa98xx {
 	int prof_vsteps[TFACONT_MAXPROFS]; /* store vstep per profile (single device) */
 
 #ifdef TFA9874_NONDSP_STEREO
-	unsigned int nonDSP_stereo;
+        unsigned int nonDSP_stereo;
 #endif
 
 #ifdef CONFIG_DEBUG_FS
@@ -125,6 +132,7 @@ struct tfa98xx {
 	unsigned int flags;
 	bool set_mtp_cal;
 	uint16_t cal_data;
+	int lost_mute_state;
 };
 
 

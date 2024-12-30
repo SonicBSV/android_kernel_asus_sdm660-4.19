@@ -1,12 +1,20 @@
 /*
- * Copyright (C) 2014 NXP Semiconductors, All Rights Reserved.
+ * Copyright 2014-2017 NXP Semiconductors
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
+#include "dbgprint.h"
 #include "tfa_container.h"
 #include "tfa.h"
 #include "tfa98xx_tfafieldnames.h"
@@ -241,7 +249,7 @@ void tfa_set_query_info(struct tfa_device *tfa)
 	case 0: /* tfanone : non-i2c external DSP device */
 		/* e.g. qc adsp */
 		tfa->supportDrc = supportYes;
-		tfa->tfa_family = 2;
+		tfa->tfa_family = 0;
 		tfa->spkr_count = 0;
 		tfa->daimap = 0;
 		tfanone_ops(&tfa->dev_ops); /* register device operations via tfa hal*/
@@ -599,24 +607,6 @@ enum Tfa98xx_Error tfa98xx_set_osc_powerdown(struct tfa_device *tfa, int state)
 	return Tfa98xx_Error_Not_Implemented;
 }
 
-/* * Set manager state to operating state with coolflux disabled.
-*
-*
-*  @param[in] tfa device description structure
-*  @return Tfa98xx_Error_Ok when successfull, error otherwise.
-*/
-enum Tfa98xx_Error tfa98xx_set_calib_state(struct tfa_device *tfa) {
-	enum Tfa98xx_Error error = Tfa98xx_Error_Ok;
-	
-	(void)error;
-	if (tfa->dev_ops.set_calib_state) {
-		return tfa->dev_ops.set_calib_state(tfa);
-	}
-
-	return Tfa98xx_Error_Not_Implemented;
-
-}
-
 /** Check presence of powerswitch=1 in configuration and optimal setting.
 *
 *  @param[in] tfa device description structure
@@ -720,25 +710,15 @@ enum Tfa98xx_Error tfa98xx_get_mtp(struct tfa_device *tfa, uint16_t *value)
 {
 	int status;
 	int result;
-	int tries = 0;
 
 	/* not possible if PLL in powerdown */
 	if ( TFA_GET_BF(tfa, PWDN) ) {
 		pr_debug("PLL in powerdown\n");
 		return Tfa98xx_Error_NoClock;
 	}
-	
-	/* Wait until we are in PLL powerdown */
-	do {
-		result = tfa98xx_dsp_system_stable(tfa, &status);
-		if (status==1)
-			break;
-		else
-			msleep_interruptible(10); /* wait 10ms to avoid busload */
-		tries++;
-	} while (tries <= 100);
 
-	if ((tries > 100) || (status == 0)) {
+	tfa98xx_dsp_system_stable(tfa, &status);
+	if (status==0) {
 		pr_debug("PLL not running\n");
 		return Tfa98xx_Error_NoClock;
 	}
@@ -2958,7 +2938,7 @@ enum Tfa98xx_Error tfaRunWaitCalibration(struct tfa_device *tfa, int *calibrateD
  * tfa_dev_start will only do the basics: Going from powerdown to operating or a profile switch.
  * for calibrating or akoustic shock handling use the tfa98xxCalibration function.
  */
-enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep)
+enum Tfa98xx_Error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep)
 {
 	enum Tfa98xx_Error err = Tfa98xx_Error_Ok;
 	int active_profile = -1;
@@ -3017,8 +2997,7 @@ enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep
 		}
 
 		err = show_current_state(tfa);
-		/* get current vstep*/
-		tfa->vstep = tfa_dev_get_swvstep(tfa);
+
 		if (vstep != tfa->vstep && vstep != -1) {
 			err = tfaContWriteFilesVstep(tfa, next_profile, vstep);
 			if ( err != Tfa98xx_Error_Ok)
@@ -3042,10 +3021,10 @@ enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep
 error_exit:
 	show_current_state(tfa);
 
-	return err;
+	return (enum Tfa98xx_Error)err;
 }
 
-enum tfa_error tfa_dev_stop(struct tfa_device *tfa)
+enum Tfa98xx_Error tfa_dev_stop(struct tfa_device *tfa)
 {
 	enum Tfa98xx_Error err = Tfa98xx_Error_Ok;
 
@@ -3058,12 +3037,12 @@ enum tfa_error tfa_dev_stop(struct tfa_device *tfa)
 	/* powerdown CF */
 	err = tfa98xx_powerdown(tfa, 1 );
 	if ( err != Tfa98xx_Error_Ok)
-		return err;
+		return (enum Tfa98xx_Error)err;
 
 	/* disable I2S output on TFA1 devices without TDM */
 	err = tfa98xx_aec_output(tfa, 0);
 
-	return err;
+	return (enum Tfa98xx_Error)err;
 }
 
 /*
@@ -3101,9 +3080,8 @@ int tfa_reset(struct tfa_device *tfa)
 		err = -TFA_SET_BF(tfa, I2CR, 1);
 		PRINT_ASSERT(err);
 	} else {
-		if (tfa->ext_dsp > 0) {
+		if (tfa->ext_dsp > 0)
 			tfa98xx_init_dsp(tfa);
-		}
 	}
 
 	return err;
@@ -3491,7 +3469,7 @@ int tfa_dev_probe(int slave, struct tfa_device *tfa)
 
 	/* read revid via low level hal, register 3 */
 	if (tfa98xx_read_register16(tfa, 3, &rev) != Tfa98xx_Error_Ok) {
-		pr_err("Error: Unable to read revid from slave:0x%02x\n", slave);
+		PRINT("\nError: Unable to read revid from slave:0x%02x \n", slave);
 		return -1;
 	}
 
@@ -3507,9 +3485,9 @@ int tfa_dev_probe(int slave, struct tfa_device *tfa)
 	return 0;
 }
 
-enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
+enum Tfa98xx_Error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 {
-	enum tfa_error err = tfa_error_ok;
+	enum Tfa98xx_Error err = Tfa98xx_Error_Ok;
 	int loop = 50, ready = 0;
 	int count;
 
@@ -3533,17 +3511,22 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 
 		/* Make sure the DSP is running! */
 		do {
-			err = tfa98xx_dsp_system_stable(tfa, &ready);
-			if (err != tfa_error_ok)
+			err = (enum Tfa98xx_Error)tfa98xx_dsp_system_stable(tfa, &ready);
+			if (err != Tfa98xx_Error_Ok)
 				return err;
 			if (ready)
 				break;
 		} while (loop--);
+
+/* Without Check DSP state function for ARA nonDSP project for device without audio calibration */
+#ifndef TFA9874_NONDSP_STEREO
 		/* Enable FAIM when clock is stable, to avoid MTP corruption */
-		err = tfa98xx_faim_protect(tfa, 1);
+		err = (enum Tfa98xx_Error)tfa98xx_faim_protect(tfa, 1);
 		if (tfa->verbose) {
 			pr_debug("FAIM enabled (err:%d).\n", err);
 		}
+#endif
+
 		break;
 	case TFA_STATE_INIT_FW:      /* DSP framework active (~patch loaded) */
 		break;
@@ -3557,6 +3540,8 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 		TFA_SET_BF(tfa, SBSL, 1);	/* Coming from state 6 */
 #endif
 
+/* Without Check DSP state function for ARA nonDSP project for device without audio calibration */
+#ifndef TFA9874_NONDSP_STEREO
 									/*
 									* Disable MTP clock to protect memory.
 									* However in case of calibration wait for DSP! (This should be case only during calibration).
@@ -3568,10 +3553,11 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 				count--;
 			}
 		}
-		err = tfa98xx_faim_protect(tfa, 0);
+		err = (enum Tfa98xx_Error)tfa98xx_faim_protect(tfa, 0);
 		if (tfa->verbose) {
 			pr_debug("FAIM disabled (err:%d).\n", err);
 		}
+#endif
 
 		/* Synchonize I/V delay on 96/97 at cold start */
 		if (tfa->sync_iv_delay) {
@@ -3598,7 +3584,7 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 		break;
 	default:
 		if (state & 0x0f)
-			return tfa_error_bad_param;
+			return Tfa98xx_Error_Bad_Parameter;
 	}
 
 	/* state modifiers */
@@ -3611,17 +3597,16 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa, enum tfa_state state)
 
 	tfa->state = state;
 
-	return tfa_error_ok;
+	return Tfa98xx_Error_Ok;
 }
 
 enum tfa_state tfa_dev_get_state(struct tfa_device *tfa)
 {
-	int cold = 0;
+	int cold = TFA_GET_BF(tfa, ACS);
 	int manstate;
 
 	/* different per family type */
 	if ( tfa->tfa_family == 1 ) {
-		cold = TFA_GET_BF(tfa, ACS);
 		if (  cold && TFA_GET_BF(tfa, PWDN) )
 			tfa->state = TFA_STATE_RESET;
 		else if ( !cold && TFA_GET_BF(tfa, SWS))
@@ -3630,7 +3615,7 @@ enum tfa_state tfa_dev_get_state(struct tfa_device *tfa)
 		manstate = TFA_GET_BF(tfa, MANSTATE);
 		switch(manstate) {
 			case 0:
-				tfa->state = TFA_STATE_POWERDOWN;
+				tfa->state = cold ?  TFA_STATE_RESET : TFA_STATE_POWERDOWN;
 				break;
 			case 8: /* if dsp reset if off assume framework is running */
 				tfa->state = TFA_GET_BF(tfa, RST) ? TFA_STATE_INIT_CF : TFA_STATE_INIT_FW;
@@ -3684,16 +3669,16 @@ int tfa_dev_mtp_get(struct tfa_device *tfa, enum tfa_mtp item)
 	return value;
 }
 
-enum tfa_error tfa_dev_mtp_set(struct tfa_device *tfa, enum tfa_mtp item, int value)
+enum Tfa98xx_Error tfa_dev_mtp_set(struct tfa_device *tfa, enum tfa_mtp item, int value)
 {
-	enum tfa_error err = tfa_error_ok;
+	enum Tfa98xx_Error err = Tfa98xx_Error_Ok;
 
 	switch (item) {
 		case TFA_MTP_OTC:
-			err = tfa98xx_set_mtp(tfa, (uint16_t)value, TFA98XX_KEY2_PROTECTED_MTP0_MTPOTC_MSK);
+			err = (enum Tfa98xx_Error)tfa98xx_set_mtp(tfa, (uint16_t)value, TFA98XX_KEY2_PROTECTED_MTP0_MTPOTC_MSK);
 			break;
 		case TFA_MTP_EX:
-			err = tfa98xx_set_mtp(tfa, (uint16_t)value, TFA98XX_KEY2_PROTECTED_MTP0_MTPEX_MSK);
+			err = (enum Tfa98xx_Error)tfa98xx_set_mtp(tfa, (uint16_t)value, TFA98XX_KEY2_PROTECTED_MTP0_MTPEX_MSK);
 			break;
 		case TFA_MTP_RE25:
 		case TFA_MTP_RE25_PRIM:
@@ -3709,14 +3694,14 @@ enum tfa_error tfa_dev_mtp_set(struct tfa_device *tfa, enum tfa_mtp item, int va
 				TFA_SET_BF(tfa, R25CR, (uint16_t)value);
 			} else {
 				pr_debug("Error: Current device has no secondary Re25 channel \n");
-				err = tfa_error_bad_param;
+				err = Tfa98xx_Error_Bad_Parameter;
 			}
 			break;
 		case TFA_MTP_LOCK:
 			break;
 	}
 
-	return err;
+	return (enum Tfa98xx_Error)err;
 }
 
 int tfa_get_pga_gain(struct tfa_device *tfa)
@@ -3806,7 +3791,7 @@ int tfa_plop_noise_interrupt(struct tfa_device *tfa, int profile, int vstep)
 		if (no_clk == 1) {
 			/* Clock is lost. Set I2CR to remove POP noise */
 			pr_info("No clock detected. Resetting the I2CR to avoid pop on 72! \n");
-			err = tfa_dev_start(tfa, profile, vstep);
+			err = (enum Tfa98xx_Error)tfa_dev_start(tfa, profile, vstep);
 			if (err != Tfa98xx_Error_Ok) {
 				pr_err("Error loading i2c registers (tfa_dev_start), err=%d\n", err);
 			} else {

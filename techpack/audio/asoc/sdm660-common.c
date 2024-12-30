@@ -4623,11 +4623,15 @@ int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				goto clk_off;
 			}
 		}
-		if (pdata->mi2s_gpio_p[index]) {
-			msm_cdc_pinctrl_select_active_state(
-					pdata->mi2s_gpio_p[index]);
-			pr_info("%s: mi2s_gpio_p\n", __func__);
+
+		/* Huaqin add for config i2s tert dai for nxp pa by xudayi at 2018/03/03 start */
+		if (index == TERT_MI2S) {
+			/* Huaqin add sar switcher by chenyijun5 at 2018/03/20 end*/
+		    msm_cdc_pinctrl_select_active_state(pdata->tert_mi2s_gpio_p);
+			pr_debug("daixianze %s tert_mi2s_gpio_p\n", __func__);
 		}
+		/* Huaqin add for config i2s tert dai for nxp pa by xudayi at 2018/03/03 end */
+
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 	return 0;
@@ -4666,11 +4670,14 @@ void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 
 	mutex_lock(&mi2s_intf_conf[index].lock);
 	if (--mi2s_intf_conf[index].ref_cnt == 0) {
-		 if (pdata->mi2s_gpio_p[index]) {
-			msm_cdc_pinctrl_select_sleep_state(
-					pdata->mi2s_gpio_p[index]);
-			pr_info("%s: mi2s_gpio_p\n", __func__);
-		  }
+
+		/* Huaqin add for config i2s tert dai for nxp pa by xudayi at 2018/03/03 start */
+        if (index == TERT_MI2S)
+		{
+		    msm_cdc_pinctrl_select_sleep_state(pdata->tert_mi2s_gpio_p);
+			pr_debug("daixianze %s tert_mi2s_gpio_p \n", __func__);
+		}
+		/* Huaqin add for config i2s tert dai for nxp pa by xudayi at 2018/03/03 end */
 
 		ret = msm_mi2s_set_sclk(substream, false);
 		if (ret < 0)

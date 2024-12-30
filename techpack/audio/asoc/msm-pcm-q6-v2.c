@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 
@@ -224,7 +225,7 @@ static void event_handler(uint32_t opcode,
 				atomic_inc(&prtd->in_count);
 			}
 			if (atomic_read(&prtd->in_count) == prtd->periods) {
-				pr_info("%s: reclaimed all bufs\n", __func__);
+				pr_debug("%s: reclaimed all bufs\n", __func__);
 				if (atomic_read(&prtd->start))
 					snd_pcm_period_elapsed(substream);
 				wake_up(&the_locks.read_wait);
@@ -1007,7 +1008,15 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 			xfer = size;
 		offset = prtd->in_frame_info[idx].offset;
 		pr_debug("Offset value = %d\n", offset);
-		if (size == 0 || size < prtd->pcm_count) {
+
+		if (offset >= size) {
+			pr_err("%s: Invalid dsp buf offset\n", __func__);
+			ret = -EFAULT;
+			q6asm_cpu_buf_release(OUT, prtd->audio_client);
+			goto fail;
+		}
+
+		if ((size == 0 || size < prtd->pcm_count) && ((offset + size) < prtd->pcm_count)) {
 			memset(bufptr + offset + size, 0, prtd->pcm_count - size);
 			if (fbytes > prtd->pcm_count)
 				size = xfer = prtd->pcm_count;
@@ -1334,7 +1343,7 @@ static int msm_pcm_adsp_stream_cmd_put(struct snd_kcontrol *kcontrol,
 		goto done;
 	}
 	if (substream->ref_count <= 0) {
-		pr_err_ratelimited("%s substream ref_count:%d invalid\n",
+		pr_debug("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		ret = -EINVAL;
 		goto done;
@@ -1833,7 +1842,7 @@ static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 
 	mutex_lock(&pdata->lock);
 	if (substream->ref_count <= 0) {
-		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
+		pr_debug("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
 		return -EINVAL;
@@ -1906,7 +1915,7 @@ static int msm_pcm_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 
 	mutex_lock(&pdata->lock);
 	if (substream->ref_count <= 0) {
-		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
+		pr_debug("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
 		return -EINVAL;
@@ -2194,7 +2203,7 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 
 	mutex_lock(&pdata->lock);
 	if (substream->ref_count <= 0) {
-		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
+		pr_debug("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
 		return -EINVAL;
