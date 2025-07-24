@@ -59,7 +59,6 @@ struct net {
 	spinlock_t		rules_mod_lock;
 
 	u32			hash_mix;
-	atomic64_t		cookie_gen;
 
 	struct list_head	list;		/* list of network namespaces */
 	struct list_head	exit_list;	/* To linked to call pernet exit
@@ -151,6 +150,9 @@ struct net {
 #ifdef CONFIG_XFRM
 	struct netns_xfrm	xfrm;
 #endif
+
+	atomic64_t		net_cookie; /* written once */
+
 #if IS_ENABLED(CONFIG_IP_VS)
 	struct netns_ipvs	*ipvs;
 #endif
@@ -209,6 +211,8 @@ extern struct list_head net_namespace_list;
 
 struct net *get_net_ns_by_pid(pid_t pid);
 struct net *get_net_ns_by_fd(int fd);
+
+u64 __net_gen_cookie(struct net *net);
 
 #ifdef CONFIG_SYSCTL
 void ipx_register_sysctl(void);

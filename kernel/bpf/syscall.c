@@ -32,6 +32,7 @@
 #include <linux/ctype.h>
 #include <linux/btf.h>
 #include <linux/nospec.h>
+#include <linux/poll.h>
 
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PROG_ARRAY || \
 			   (map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
@@ -197,6 +198,34 @@ static int bpf_charge_memlock(struct user_struct *user, u32 pages)
 static void bpf_uncharge_memlock(struct user_struct *user, u32 pages)
 {
 	atomic_long_sub(pages, &user->locked_vm);
+}
+
+int bpf_map_charge_init(struct bpf_map_memory *mem, u64 size)
+{
+    u32 pages = round_up(size, PAGE_SIZE) >> PAGE_SHIFT;
+    struct user_struct *user;
+    int ret;
+
+    if (size >= U32_MAX - PAGE_SIZE)
+        return -E2BIG;
+
+    user = get_current_user();
+    ret = bpf_charge_memlock(user, pages);
+    if (ret) {
+        free_uid(user);   
+        return ret;    
+    }
+
+    mem->pages = pages;
+    mem->user = user;
+
+    return 0;
+}
+
+void bpf_map_charge_finish(struct bpf_map_memory *mem)
+{
+    bpf_uncharge_memlock(mem->user, mem->pages);
+    free_uid(mem->user);
 }
 
 static int bpf_map_init_memlock(struct bpf_map *map)
@@ -394,6 +423,16 @@ static ssize_t bpf_dummy_write(struct file *filp, const char __user *buf,
 	return -EINVAL;
 }
 
+static __poll_t bpf_map_poll(struct file *filp, struct poll_table_struct *pts)
+{
+	struct bpf_map *map = filp->private_data;
+
+	if (map->ops->map_poll)
+		return map->ops->map_poll(map, filp, pts);
+
+	return EPOLLERR;
+}
+
 const struct file_operations bpf_map_fops = {
 #ifdef CONFIG_PROC_FS
 	.show_fdinfo	= bpf_map_show_fdinfo,
@@ -401,6 +440,7 @@ const struct file_operations bpf_map_fops = {
 	.release	= bpf_map_release,
 	.read		= bpf_dummy_read,
 	.write		= bpf_dummy_write,
+	.poll		= bpf_map_poll,
 };
 
 int bpf_map_new_fd(struct bpf_map *map, int flags)
@@ -472,9 +512,16 @@ static int map_check_btf(struct bpf_map *map, const struct btf *btf,
 	u32 key_size, value_size;
 	int ret = 0;
 
-	key_type = btf_type_id_size(btf, &btf_key_id, &key_size);
-	if (!key_type || key_size != map->key_size)
-		return -EINVAL;
+	/* Some maps allow key to be unspecified. */
+	if (btf_key_id) {
+		key_type = btf_type_id_size(btf, &btf_key_id, &key_size);
+		if (!key_type || key_size != map->key_size)
+			return -EINVAL;
+	} else {
+		key_type = btf_type_by_id(btf, 0);
+		if (!map->ops->map_check_btf)
+			return -EINVAL;
+	}
 
 	value_type = btf_type_id_size(btf, &btf_value_id, &value_size);
 	if (!value_type || value_size != map->value_size)
@@ -507,6 +554,7 @@ static int map_check_btf(struct bpf_map *map, const struct btf *btf,
 static int map_create(union bpf_attr *attr)
 {
 	int numa_node = bpf_map_attr_numa_node(attr);
+	u32 map_type = attr->map_type;
 	struct bpf_map *map;
 	int f_flags;
 	int err;
@@ -524,6 +572,43 @@ static int map_create(union bpf_attr *attr)
 	     !node_online(numa_node)))
 		return -EINVAL;
 
+	/* check privileged map type permissions */
+	switch (map_type) {
+	case BPF_MAP_TYPE_ARRAY:
+	case BPF_MAP_TYPE_PERCPU_ARRAY:
+	case BPF_MAP_TYPE_PROG_ARRAY:
+	case BPF_MAP_TYPE_PERF_EVENT_ARRAY:
+	case BPF_MAP_TYPE_CGROUP_ARRAY:
+	case BPF_MAP_TYPE_ARRAY_OF_MAPS:
+	case BPF_MAP_TYPE_HASH:
+	case BPF_MAP_TYPE_PERCPU_HASH:
+	case BPF_MAP_TYPE_HASH_OF_MAPS:
+	case BPF_MAP_TYPE_RINGBUF:
+	case BPF_MAP_TYPE_CGROUP_STORAGE:
+	case BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
+		/* unprivileged */
+		break;
+	case BPF_MAP_TYPE_SK_STORAGE:
+	case BPF_MAP_TYPE_LPM_TRIE:
+	case BPF_MAP_TYPE_REUSEPORT_SOCKARRAY:
+	case BPF_MAP_TYPE_STACK_TRACE:
+	case BPF_MAP_TYPE_LRU_HASH:
+	case BPF_MAP_TYPE_LRU_PERCPU_HASH:
+	case BPF_MAP_TYPE_CPUMAP:
+		break;
+	case BPF_MAP_TYPE_SOCKMAP:
+	case BPF_MAP_TYPE_SOCKHASH:
+	case BPF_MAP_TYPE_DEVMAP:
+	case BPF_MAP_TYPE_DEVMAP_HASH:
+	case BPF_MAP_TYPE_XSKMAP:
+		if (!capable(CAP_NET_ADMIN))
+			return -EPERM;
+		break;
+	default:
+		WARN(1, "unsupported map type %d", map_type);
+		return -EPERM;
+	}
+
 	/* find map type and init map: hashtable vs rbtree vs bloom vs ... */
 	map = find_and_alloc_map(attr);
 	if (IS_ERR(map))
@@ -539,7 +624,7 @@ static int map_create(union bpf_attr *attr)
 	if (attr->btf_key_type_id || attr->btf_value_type_id) {
 		struct btf *btf;
 
-		if (!attr->btf_key_type_id || !attr->btf_value_type_id) {
+		if (!attr->btf_value_type_id) {
 			err = -EINVAL;
 			goto free_map_nouncharge;
 		}
@@ -1385,6 +1470,7 @@ bpf_prog_load_check_attach_type(enum bpf_prog_type prog_type,
 	case BPF_PROG_TYPE_CGROUP_SOCK:
 		switch (expected_attach_type) {
 		case BPF_CGROUP_INET_SOCK_CREATE:
+		case BPF_CGROUP_INET_SOCK_RELEASE:
 		case BPF_CGROUP_INET4_POST_BIND:
 		case BPF_CGROUP_INET6_POST_BIND:
 			return 0;
@@ -1449,11 +1535,12 @@ static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
 	/* eBPF programs must be GPL compatible to use GPL-ed functions */
 	is_gpl = license_is_gpl_compatible(license);
 
-	if (attr->insn_cnt == 0 || attr->insn_cnt > BPF_MAXINSNS)
+	if (attr->insn_cnt == 0 ||
+	    attr->insn_cnt > (capable(CAP_SYS_ADMIN) ? BPF_COMPLEXITY_LIMIT_INSNS : BPF_MAXINSNS))
 		return -E2BIG;
 
 	if (type == BPF_PROG_TYPE_KPROBE &&
-	    attr->kern_version != LINUX_VERSION_CODE)
+	    attr->kern_version != attr->kern_version)
 		return -EINVAL;
 
 	if (type != BPF_PROG_TYPE_SOCKET_FILTER &&
@@ -1699,6 +1786,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 		ptype = BPF_PROG_TYPE_CGROUP_SKB;
 		break;
 	case BPF_CGROUP_INET_SOCK_CREATE:
+	case BPF_CGROUP_INET_SOCK_RELEASE:
 	case BPF_CGROUP_INET4_POST_BIND:
 	case BPF_CGROUP_INET6_POST_BIND:
 		ptype = BPF_PROG_TYPE_CGROUP_SOCK;
@@ -1786,6 +1874,7 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 		ptype = BPF_PROG_TYPE_CGROUP_SKB;
 		break;
 	case BPF_CGROUP_INET_SOCK_CREATE:
+	case BPF_CGROUP_INET_SOCK_RELEASE:
 	case BPF_CGROUP_INET4_POST_BIND:
 	case BPF_CGROUP_INET6_POST_BIND:
 		ptype = BPF_PROG_TYPE_CGROUP_SOCK;
@@ -1845,6 +1934,7 @@ static int bpf_prog_query(const union bpf_attr *attr,
 	case BPF_CGROUP_INET_INGRESS:
 	case BPF_CGROUP_INET_EGRESS:
 	case BPF_CGROUP_INET_SOCK_CREATE:
+	case BPF_CGROUP_INET_SOCK_RELEASE:
 	case BPF_CGROUP_INET4_BIND:
 	case BPF_CGROUP_INET6_BIND:
 	case BPF_CGROUP_INET4_POST_BIND:
@@ -2657,6 +2747,10 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 	case BPF_MAP_GET_NEXT_ID:
 		err = bpf_obj_get_next_id(&attr, uattr,
 					  &map_idr, &map_idr_lock);
+		break;
+	case BPF_BTF_GET_NEXT_ID:
+		err = bpf_obj_get_next_id(&attr, uattr,
+					  &btf_idr, &btf_idr_lock);
 		break;
 	case BPF_PROG_GET_FD_BY_ID:
 		err = bpf_prog_get_fd_by_id(&attr);

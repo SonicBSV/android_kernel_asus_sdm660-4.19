@@ -371,13 +371,6 @@ static void array_map_free(struct bpf_map *map)
 {
 	struct bpf_array *array = container_of(map, struct bpf_array, map);
 
-	/* at this point bpf_prog->aux->refcnt == 0 and this map->refcnt == 0,
-	 * so the programs (can be more than one that used this map) were
-	 * disconnected from events. Wait for outstanding programs to complete
-	 * and free the array
-	 */
-	synchronize_rcu();
-
 	if (array->map.map_type == BPF_MAP_TYPE_PERCPU_ARRAY)
 		bpf_array_free_percpu(array);
 
@@ -397,7 +390,8 @@ static void array_map_seq_show_elem(struct bpf_map *map, void *key,
 		return;
 	}
 
-	seq_printf(m, "%u: ", *(u32 *)key);
+	if (map->btf_key_type_id)
+		seq_printf(m, "%u: ", *(u32 *)key);
 	btf_type_seq_show(map->btf, map->btf_value_type_id, value, m);
 	seq_puts(m, "\n");
 
@@ -410,6 +404,18 @@ static int array_map_check_btf(const struct bpf_map *map,
 			       const struct btf_type *value_type)
 {
 	u32 int_data;
+
+	/* One exception for keyless BTF: .bss/.data/.rodata map */
+	if (btf_type_is_void(key_type)) {
+		if (map->map_type != BPF_MAP_TYPE_ARRAY ||
+		    map->max_entries != 1)
+			return -EINVAL;
+
+		if (BTF_INFO_KIND(value_type->info) != BTF_KIND_DATASEC)
+			return -EINVAL;
+
+		return 0;
+	}
 
 	if (BTF_INFO_KIND(key_type->info) != BTF_KIND_INT)
 		return -EINVAL;
@@ -462,8 +468,6 @@ static void fd_array_map_free(struct bpf_map *map)
 {
 	struct bpf_array *array = container_of(map, struct bpf_array, map);
 	int i;
-
-	synchronize_rcu();
 
 	/* make sure it's empty */
 	for (i = 0; i < array->map.max_entries; i++)

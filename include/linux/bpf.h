@@ -16,8 +16,10 @@
 #include <linux/rbtree_latch.h>
 #include <linux/numa.h>
 #include <linux/wait.h>
+#include <linux/poll.h>
 
 struct bpf_verifier_env;
+struct bpf_verifier_log;
 struct perf_event;
 struct bpf_prog;
 struct bpf_map;
@@ -25,6 +27,9 @@ struct sock;
 struct seq_file;
 struct btf;
 struct btf_type;
+
+extern struct idr btf_idr;
+extern spinlock_t btf_idr_lock;
 
 /* map is generic key/value storage optionally accesible by eBPF programs */
 struct bpf_map_ops {
@@ -64,6 +69,14 @@ struct bpf_map_ops {
 				     u64 *imm, u32 off);
 	int (*map_direct_value_meta)(const struct bpf_map *map,
 				     u64 imm, u32 *off);
+	int (*map_mmap)(struct bpf_map *map, struct vm_area_struct *vma);
+	__poll_t (*map_poll)(struct bpf_map *map, struct file *filp,
+			     struct poll_table_struct *pts);
+};
+
+struct bpf_map_memory {
+    u32 pages;
+    struct user_struct *user;
 };
 
 struct bpf_map {
@@ -86,8 +99,10 @@ struct bpf_map {
 	u32 btf_key_type_id;
 	u32 btf_value_type_id;
 	struct btf *btf;
+    struct bpf_map_memory memory;
 	u32 pages;
 	bool unpriv_array;
+	bool frozen;
 	/* 51 bytes hole */
 
 	/* The 3rd and 4th cacheline with misc members to avoid false sharing
@@ -200,12 +215,17 @@ enum bpf_arg_type {
 	ARG_CONST_SIZE_OR_ZERO,	/* number of bytes accessed from memory or 0 */
 
 	ARG_PTR_TO_CTX,		/* pointer to context */
+	ARG_PTR_TO_CTX_OR_NULL,	/* pointer to context or NULL */
 	ARG_ANYTHING,		/* any (initialized) argument is ok */
 	ARG_PTR_TO_SPIN_LOCK,	/* pointer to bpf_spin_lock */
 	ARG_PTR_TO_SOCK_COMMON,	/* pointer to sock_common */
 	ARG_PTR_TO_INT,		/* pointer to int */
 	ARG_PTR_TO_LONG,	/* pointer to long */
-	ARG_PTR_TO_SOCKET,	/* pointer to bpf_sock (fullsock) */
+	ARG_PTR_TO_SOCKET,      /* pointer to bpf_sock (fullsock) */
+	ARG_PTR_TO_BTF_ID = 18,	/* pointer to in-kernel struct */
+	ARG_PTR_TO_ALLOC_MEM = 19,	/* pointer to dynamically allocated memory */
+	ARG_PTR_TO_ALLOC_MEM_OR_NULL = 20,	/* pointer to dynamically allocated memory or NULL */
+	ARG_CONST_ALLOC_SIZE_OR_ZERO = 21,	/* number of allocated bytes requested */
 };
 
 /* type of values returned from helper functions */
@@ -217,6 +237,8 @@ enum bpf_return_type {
 	RET_PTR_TO_SOCKET_OR_NULL,	/* returns a pointer to a socket or NULL */
 	RET_PTR_TO_TCP_SOCK_OR_NULL,	/* returns a pointer to a tcp_sock or NULL */
 	RET_PTR_TO_SOCK_COMMON_OR_NULL,	/* returns a pointer to a sock_common or NULL */
+	RET_PTR_TO_ALLOC_MEM_OR_NULL,	/* returns a pointer to dynamically allocated memory or NULL */
+	RET_PTR_TO_BTF_ID_OR_NULL,	/* returns a pointer to a btf_id or NULL */
 };
 
 /* eBPF function prototype used by verifier to allow BPF_CALLs from eBPF programs
@@ -228,11 +250,33 @@ struct bpf_func_proto {
 	bool gpl_only;
 	bool pkt_access;
 	enum bpf_return_type ret_type;
-	enum bpf_arg_type arg1_type;
-	enum bpf_arg_type arg2_type;
-	enum bpf_arg_type arg3_type;
-	enum bpf_arg_type arg4_type;
-	enum bpf_arg_type arg5_type;
+	union {
+		struct {
+			enum bpf_arg_type arg1_type;
+			enum bpf_arg_type arg2_type;
+			enum bpf_arg_type arg3_type;
+			enum bpf_arg_type arg4_type;
+			enum bpf_arg_type arg5_type;
+		};
+		enum bpf_arg_type arg_type[5];
+	};
+    union {
+        struct {
+            u32 *arg1_btf_id;
+            u32 *arg2_btf_id;
+            u32 *arg3_btf_id;
+            u32 *arg4_btf_id;
+            u32 *arg5_btf_id;
+        };
+        u32 *arg_btf_id[5];
+    };
+	u32 *btf_id; /* BTF ids of arguments */
+	bool (*check_btf_id)(u32 btf_id, u32 arg); /* if the argument btf_id is
+						    * valid. Often used if more
+						    * than one btf id is permitted
+						    * for this argument.
+						    */
+	int *ret_btf_id; /* return value btf_id */
 };
 
 /* bpf_context is intentionally undefined structure. Pointer to bpf_context is
@@ -275,6 +319,15 @@ enum bpf_reg_type {
 	PTR_TO_TCP_SOCK,	 /* reg points to struct tcp_sock */
 	PTR_TO_TCP_SOCK_OR_NULL, /* reg points to struct tcp_sock or NULL */
 	PTR_TO_TP_BUFFER,	 /* reg points to a writable raw tp's buffer */
+	PTR_TO_XDP_SOCK,
+	PTR_TO_BTF_ID,		 /* reg points to kernel struct */
+	PTR_TO_BTF_ID_OR_NULL,	 /* reg points to kernel struct or NULL */
+	PTR_TO_MEM = 21,		 /* reg points to valid memory region */
+	PTR_TO_MEM_OR_NULL = 22,	 /* reg points to valid memory region or NULL */
+	PTR_TO_RDONLY_BUF = 23,	 /* reg points to a readonly buffer */
+	PTR_TO_RDONLY_BUF_OR_NULL = 24, /* reg points to a readonly buffer or NULL */
+	PTR_TO_RDWR_BUF = 25,	 /* reg points to a read/write buffer */
+	PTR_TO_RDWR_BUF_OR_NULL = 26, /* reg points to a read/write buffer or NULL */
 };
 
 /* The information passed from prog-specific *_is_valid_access
@@ -282,7 +335,11 @@ enum bpf_reg_type {
  */
 struct bpf_insn_access_aux {
 	enum bpf_reg_type reg_type;
-	int ctx_field_size;
+	union {
+		int ctx_field_size;
+		u32 btf_id;
+	};
+	struct bpf_verifier_log *log; /* for verbose logs */
 };
 
 static inline void
@@ -341,6 +398,12 @@ enum bpf_cgroup_storage_type {
 };
 #define MAX_BPF_CGROUP_STORAGE_TYPE __BPF_CGROUP_STORAGE_MAX
 
+struct bpf_ctx_arg_aux {
+    u32 offset;
+    enum bpf_reg_type reg_type;
+    u32 btf_id;
+};
+
 struct bpf_prog_aux {
 	atomic_t refcnt;
 	u32 used_map_cnt;
@@ -351,6 +414,12 @@ struct bpf_prog_aux {
 	bool offload_requested;
 	u32 func_cnt; /* used by non-func prog as the number of func progs */
 	u32 func_idx; /* 0 for non-func prog, the index in func array for func prog */
+	u32 ctx_arg_info_size;
+	u32 max_rdonly_access;
+	u32 max_rdwr_access;
+	u32 attach_btf_id; /* in-kernel BTF type id to attach to */
+	const struct bpf_ctx_arg_aux *ctx_arg_info;
+	bool btf_id_or_null_non0_off;
 	struct bpf_prog **func;
 	void *jit_data; /* JIT specific data. arch dependent */
 	struct latch_tree_node ksym_tnode;
@@ -414,6 +483,7 @@ struct bpf_array {
 	};
 };
 
+#define BPF_COMPLEXITY_LIMIT_INSNS      1000000 /* yes. 1M insns */
 #define MAX_TAIL_CALL_CNT 32
 
 struct bpf_event_entry {
@@ -425,6 +495,7 @@ struct bpf_event_entry {
 
 bool bpf_prog_array_compatible(struct bpf_array *array, const struct bpf_prog *fp);
 int bpf_prog_calc_tag(struct bpf_prog *fp);
+const char *kernel_type_name(u32 btf_type_id);
 
 const struct bpf_func_proto *bpf_get_trace_printk_proto(void);
 
@@ -554,6 +625,8 @@ void bpf_map_put(struct bpf_map *map);
 int bpf_map_precharge_memlock(u32 pages);
 int bpf_map_charge_memlock(struct bpf_map *map, u32 pages);
 void bpf_map_uncharge_memlock(struct bpf_map *map, u32 pages);
+int bpf_map_charge_init(struct bpf_map_memory *mem, u64 size);
+void bpf_map_charge_finish(struct bpf_map_memory *mem);
 void *bpf_map_area_alloc(size_t size, int numa_node);
 void bpf_map_area_free(void *base);
 void bpf_map_init_from_attr(struct bpf_map *map, union bpf_attr *attr);
@@ -642,6 +715,14 @@ static inline bool unprivileged_ebpf_enabled(void)
 {
 	return !sysctl_unprivileged_bpf_disabled;
 }
+bool btf_ctx_access(int off, int size, enum bpf_access_type type,
+		    const struct bpf_prog *prog,
+		    struct bpf_insn_access_aux *info);
+int btf_struct_access(struct bpf_verifier_log *log,
+		      const struct btf_type *t, int off, int size,
+		      enum bpf_access_type atype,
+		      u32 *next_btf_id);
+u32 btf_resolve_helper_id(struct bpf_verifier_log *log, void *, int);
 
 #else /* !CONFIG_BPF_SYSCALL */
 static inline struct bpf_prog *bpf_prog_get(u32 ufd)
@@ -817,6 +898,7 @@ static inline bool bpf_map_is_dev_bound(struct bpf_map *map)
 
 struct bpf_map *bpf_map_offload_map_alloc(union bpf_attr *attr);
 void bpf_map_offload_map_free(struct bpf_map *map);
+void init_btf_sock_ids(struct btf *btf);
 #else
 static inline int bpf_prog_offload_init(struct bpf_prog *prog,
 					union bpf_attr *attr)
@@ -840,6 +922,9 @@ static inline struct bpf_map *bpf_map_offload_map_alloc(union bpf_attr *attr)
 }
 
 static inline void bpf_map_offload_map_free(struct bpf_map *map)
+{
+}
+static inline void init_btf_sock_ids(struct btf *btf)
 {
 }
 #endif /* CONFIG_NET && CONFIG_BPF_SYSCALL */
@@ -940,6 +1025,13 @@ extern const struct bpf_func_proto bpf_sk_redirect_hash_proto;
 extern const struct bpf_func_proto bpf_sk_redirect_map_proto;
 extern const struct bpf_func_proto bpf_get_local_storage_proto;
 extern const struct bpf_func_proto bpf_tcp_sock_proto;
+extern const struct bpf_func_proto bpf_ringbuf_output_proto;
+extern const struct bpf_func_proto bpf_ringbuf_reserve_proto;
+extern const struct bpf_func_proto bpf_ringbuf_submit_proto;
+extern const struct bpf_func_proto bpf_ringbuf_discard_proto;
+extern const struct bpf_func_proto bpf_ringbuf_query_proto;
+extern const struct bpf_func_proto bpf_get_socket_ptr_cookie_proto;
+extern const struct bpf_func_proto bpf_skc_to_tcp6_sock_proto;
 
 /* Shared helpers among cBPF and eBPF. */
 void bpf_user_rnd_init_once(void);
