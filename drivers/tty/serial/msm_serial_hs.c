@@ -2208,46 +2208,41 @@ static struct msm_hs_port *msm_hs_get_hs_port(int port_index)
 	return NULL;
 }
 
-void enable_wakeup_interrupt(struct msm_hs_port *msm_uport)
+static void disable_wakeup_interrupt(struct msm_hs_port *msm_uport)
 {
-	unsigned long flags;
-	struct uart_port *uport = &(msm_uport->uport);
+	struct irq_desc *desc;
 
-	if (!is_use_low_power_wakeup(msm_uport))
-		return;
-	if (msm_uport->wakeup.freed)
+	if (msm_uport->wakeup.irq <= 0)
 		return;
 
-	if (!(msm_uport->wakeup.enabled)) {
-		spin_lock_irqsave(&uport->lock, flags);
-		msm_uport->wakeup.ignore = 1;
-		msm_uport->wakeup.enabled = true;
-		spin_unlock_irqrestore(&uport->lock, flags);
-		disable_irq(uport->irq);
-		enable_irq(msm_uport->wakeup.irq);
-	} else {
-		MSM_HS_WARN("%s():Wake up IRQ already enabled\n", __func__);
+	/* Проверяем реальное состояние IRQ */
+	desc = irq_to_desc(msm_uport->wakeup.irq);
+	if (!desc)
+		return;
+
+	/* Только если IRQ реально включен - выключаем */
+	if (!irqd_irq_disabled(&desc->irq_data)) {
+		disable_irq(msm_uport->wakeup.irq);
+		msm_uport->wakeup.enabled = false;
 	}
 }
 
-void disable_wakeup_interrupt(struct msm_hs_port *msm_uport)
+static void enable_wakeup_interrupt(struct msm_hs_port *msm_uport)
 {
-	unsigned long flags;
-	struct uart_port *uport = &(msm_uport->uport);
+	struct irq_desc *desc;
 
-	if (!is_use_low_power_wakeup(msm_uport))
-		return;
-	if (msm_uport->wakeup.freed)
+	if (msm_uport->wakeup.irq <= 0)
 		return;
 
-	if (msm_uport->wakeup.enabled) {
-		disable_irq_nosync(msm_uport->wakeup.irq);
-		enable_irq(uport->irq);
-		spin_lock_irqsave(&uport->lock, flags);
-		msm_uport->wakeup.enabled = false;
-		spin_unlock_irqrestore(&uport->lock, flags);
-	} else {
-		MSM_HS_WARN("%s():Wake up IRQ already disabled\n", __func__);
+	/* Проверяем реальное состояние IRQ */
+	desc = irq_to_desc(msm_uport->wakeup.irq);
+	if (!desc)
+		return;
+
+	/* Только если IRQ реально выключен - включаем */
+	if (irqd_irq_disabled(&desc->irq_data)) {
+		enable_irq(msm_uport->wakeup.irq);
+		msm_uport->wakeup.enabled = true;
 	}
 }
 
