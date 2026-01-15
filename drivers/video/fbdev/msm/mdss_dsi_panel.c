@@ -8,14 +8,14 @@
 #include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-#ifndef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
-#include <linux/leds.h>
-#else
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 #include <linux/backlight.h>
 #endif
+#include <linux/leds.h>
 #include <linux/pwm.h>
 #include <linux/err.h>
 #include <linux/string.h>
+#include <linux/display_state.h>
 
 #include "mdss_dsi.h"
 #include "mdss_dba_utils.h"
@@ -36,8 +36,24 @@ extern bool shutdown_flag;
 #endif
 #endif
 
-#ifndef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
+#ifndef CONFIG_BACKLIGHT_CLASS_DEVICE
 DEFINE_LED_TRIGGER(bl_led_trigger);
+#endif
+
+#ifdef CONFIG_FB_MSM_MDSS_CUSTOM_FRAMERATE
+unsigned int refresh_rate_cus = CONFIG_FB_MSM_MDSS_DEFAULT_FRAMERATE;
+
+static int __init read_refresh_rate_cmd(char *s)
+{
+	if (s)
+		refresh_rate_cus = simple_strtoul(s, NULL, 0);
+	
+	if (refresh_rate_cus < 48 || refresh_rate_cus > 72)
+		refresh_rate_cus = CONFIG_FB_MSM_MDSS_DEFAULT_FRAMERATE;
+	
+	return 1;
+}
+__setup("refresh.rate=", read_refresh_rate_cmd);
 #endif
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
@@ -923,7 +939,7 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
-#ifndef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
+#ifndef CONFIG_BACKLIGHT_CLASS_DEVICE
 		led_trigger_event(bl_led_trigger, bl_level);
 #else
 		backlight_device_set_brightness(ctrl_pdata->raw_bd, bl_level);
@@ -2429,7 +2445,7 @@ dynamic_bitclk:
 	pinfo->dynamic_bitclk = true;
 }
 
-#ifdef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 static int dsi_panel_wled_register(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc = 0;
@@ -2456,7 +2472,7 @@ int mdss_panel_parse_bl_settings(struct device_node *np,
 	data = of_get_property(np, "qcom,mdss-dsi-bl-pmic-control-type", NULL);
 	if (data) {
 		if (!strcmp(data, "bl_ctrl_wled")) {
-#ifndef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
+#ifndef CONFIG_BACKLIGHT_CLASS_DEVICE
 			led_trigger_register_simple("bkl-trigger",
 				&bl_led_trigger);
 #else
@@ -2564,7 +2580,7 @@ int mdss_dsi_panel_timing_switch(struct mdss_dsi_ctrl_pdata *ctrl,
 	return 0;
 }
 
-#ifndef CONFIG_BACKLIGHT_QCOM_SPMI_WLED
+#ifndef CONFIG_BACKLIGHT_CLASS_DEVICE
 void mdss_dsi_unregister_bl_settings(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	if (ctrl_pdata->bklt_ctrl == BL_WLED)
@@ -2639,6 +2655,9 @@ static int mdss_dsi_panel_timing_from_dt(struct device_node *np,
 
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-framerate", &tmp);
 	pt->timing.frame_rate = !rc ? tmp : DEFAULT_FRAME_RATE;
+#ifdef CONFIG_FB_MSM_MDSS_CUSTOM_FRAMERATE
+	WRITE_ONCE(pt->timing.frame_rate, refresh_rate_cus);
+#endif
 	rc = of_property_read_u64(np, "qcom,mdss-dsi-panel-clockrate", &tmp64);
 	if (rc == -EOVERFLOW) {
 		tmp64 = 0;
