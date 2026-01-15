@@ -1881,7 +1881,7 @@ static long msm_cci_subdev_ioctl(struct v4l2_subdev *sd,
 
 static struct v4l2_subdev_core_ops msm_cci_subdev_core_ops = {
 	.ioctl = &msm_cci_subdev_ioctl,
-	.interrupt_service_routine = msm_cci_irq_routine,
+	/* .interrupt_service_routine is deprecated and not needed in 4.19 */
 };
 
 static const struct v4l2_subdev_ops msm_cci_subdev_ops = {
@@ -1938,7 +1938,7 @@ static int32_t msm_cci_init_gpio_params(struct cci_device *cci_dev)
 			gpio_tbl[i].gpio);
 	}
 
-	val_array = kzalloc(sizeof(uint32_t) * tbl_size, GFP_KERNEL);
+	val_array = kcalloc(tbl_size, sizeof(uint32_t), GFP_KERNEL);
 	if (!val_array) {
 		rc = -ENOMEM;
 		goto ERROR1;
@@ -2169,7 +2169,7 @@ static int msm_cci_probe(struct platform_device *pdev)
 	new_cci_dev->msm_sd.sd.internal_ops = &msm_cci_internal_ops;
 	new_cci_dev->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	media_entity_pads_init(&new_cci_dev->msm_sd.sd.entity, 0, NULL);
-	new_cci_dev->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_CCI;
+	new_cci_dev->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_CCI;
 	new_cci_dev->msm_sd.sd.entity.name = new_cci_dev->msm_sd.sd.name;
 	new_cci_dev->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x6;
 	msm_sd_register(&new_cci_dev->msm_sd);

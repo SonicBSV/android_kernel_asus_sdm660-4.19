@@ -28,12 +28,6 @@ enum msm_vfe_clk_rates {
 #define MSM_VFE48_HW_VERSION_SHIFT 28
 #define MSM_VFE48_HW_VERSION_MASK 0xF
 
-static inline int msm_vfe_is_vfe48_660(struct vfe_device *vfe_dev)
-{
-	return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT) &
-		MSM_VFE48_HW_VERSION_MASK) == MSM_VFE48_HW_VERSION);
-}
-
 static inline int msm_vfe_is_vfe48(struct vfe_device *vfe_dev)
 {
 	/* Check for Trinket specific as it uses h/w version 0x9 */
@@ -42,7 +36,8 @@ static inline int msm_vfe_is_vfe48(struct vfe_device *vfe_dev)
 		return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT)
 			& MSM_VFE48_HW_VERSION_MASK)
 			== MSM_VFE48_HW_VERSION_TRINKET);
-	return msm_vfe_is_vfe48_660(vfe_dev);
+	return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT) &
+		MSM_VFE48_HW_VERSION_MASK) == MSM_VFE48_HW_VERSION);
 }
 
 void msm_vfe48_stats_cfg_ub(struct vfe_device *vfe_dev);

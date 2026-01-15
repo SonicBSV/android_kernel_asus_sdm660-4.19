@@ -379,17 +379,19 @@ static int msm_csid_config(struct csid_device *csid_dev,
 
 		desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
 		desc.args[0] = csid_params->is_secure;
-		desc.args[1] = csid_params->phy_sel;
+		desc.args[1] = CSIPHY_LANES_MASKS[csid_params->phy_sel];
 
 		CDBG("phy_sel : %d, secure : %d\n",
 			csid_params->phy_sel, csid_params->is_secure);
+
+		msm_camera_tz_clear_tzbsp_status();
+
 		if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
 			SECURE_SYSCALL_ID), &desc)) {
 			pr_err("%s:%d scm call to hypervisor failed\n",
 				__func__, __LINE__);
 			return -EINVAL;
 		}
-		msm_camera_tz_clear_tzbsp_status();
 	}
 #endif
 
@@ -403,8 +405,7 @@ static int msm_csid_config(struct csid_device *csid_dev,
 	if (!msm_csid_find_max_clk_rate(csid_dev))
 		pr_err("msm_csid_find_max_clk_rate failed\n");
 
-	clk_rate = (csid_params->csi_clk > 0) ?
-				(csid_params->csi_clk) : csid_dev->csid_max_clk;
+	clk_rate = csid_dev->csid_max_clk;
 
 	clk_rate = msm_camera_clk_set_rate(&csid_dev->pdev->dev,
 		csid_dev->csid_clk[csid_dev->csid_clk_index], clk_rate);
@@ -762,7 +763,8 @@ static int msm_csid_release(struct csid_device *csid_dev)
 
 		desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
 		desc.args[0] = 0;
-		desc.args[1] = csid_dev->current_csid_params.phy_sel;
+		desc.args[1] = CSIPHY_LANES_MASKS[
+				csid_dev->current_csid_params.phy_sel];
 
 		if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
 			SECURE_SYSCALL_ID), &desc)) {
@@ -1230,7 +1232,7 @@ static int csid_probe(struct platform_device *pdev)
 	snprintf(new_csid_dev->msm_sd.sd.name,
 			ARRAY_SIZE(new_csid_dev->msm_sd.sd.name), "msm_csid");
 	media_entity_pads_init(&new_csid_dev->msm_sd.sd.entity, 0, NULL);
-	new_csid_dev->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_CSID;
+	new_csid_dev->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_CSID;
 	new_csid_dev->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x5;
 	msm_sd_register(&new_csid_dev->msm_sd);
 
