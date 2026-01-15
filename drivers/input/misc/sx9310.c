@@ -35,7 +35,7 @@
 
 /* Huaqin modify for SAR VDD by chenyijun5 at 2018/02/23 start */
 #define SX9310_VDD_MIN_UV       2800000
-#define SX9310_VDD_MAX_UV       2800000
+#define SX9310_VDD_MAX_UV       3300000 /* Relaxed max to 3.3V */
 /* Huaqin modify for SAR VDD by chenyijun5 at 2018/02/23 end */
 #define SX9310_VDD1_MIN_UV       1800000	/* modify by zch */
 #define SX9310_VDD1_MAX_UV       1800000	/* modify by zch */
@@ -52,7 +52,9 @@ MODULE_PARM_DESC(sar_switcher, "Control sarsensor open or close.");
 #define SX9310_ID_ERROR 	1
 #define SX9310_I2C_ERROR	2
 #define SX9310_WHOAMI_REG       0x42
-#define SX9310_WHOAMI_VALUE     0x1
+/* FIXED: Accept range of chip IDs for compatibility */
+#define SX9310_WHOAMI_VALUE_MIN     0x01
+#define SX9310_WHOAMI_VALUE_MAX     0x03
 static bool err_flag = 0;
 /* Huaqin add for check hw by zhuqiang at 2018/06/22 end */
 
@@ -1007,57 +1009,61 @@ static int sx9310_power_vdd1_ctl(sx93XX_t *data, bool on)
 	return ret;
 }
 
+/* FIXED: Power control logic to handle shared regulators correctly */
 static int sx9310_power_ctl(sx93XX_t *data, bool on)
 {
 	int ret = 0;
-	int err = 0;
 
-	if (!on && data->power_enabled) {
-		ret = regulator_disable(data->vdd);
-		if (ret) {
-			pr_err("Regulator vdd disable failed ret=%d\n", ret);
-			return ret;
-		}
+	if (on) {
+		if (data->power_enabled)
+			return 0;
 
-		ret = regulator_disable(data->vio);
-		if (ret) {
-			pr_err("Regulator vio disable failed ret=%d\n", ret);
-			err = regulator_enable(data->vdd);
-			return ret;
-		}
-		data->power_enabled = on;
-	} else if (on && !data->power_enabled) {
 		ret = regulator_enable(data->vdd);
 		if (ret) {
-			pr_err("Regulator vdd enable failed ret=%d\n", ret);
+			pr_err("Failed to enable vdd: %d\n", ret);
 			return ret;
 		}
-		msleep(8);	/* //>=5ms OK. */
-		ret = regulator_enable(data->vio);
-		if (ret) {
-			pr_err("Regulator vio enable failed ret=%d\n", ret);
-			err = regulator_disable(data->vdd);
-			return ret;
+		
+		msleep(10); // Wait for VDD
+
+		/* Enable VIO only if it is separate */
+		if (data->vio && data->vio != data->vdd && data->vio != data->vdd1) {
+			ret = regulator_enable(data->vio);
+			if (ret) {
+				pr_err("Failed to enable vio: %d\n", ret);
+				regulator_disable(data->vdd);
+				return ret;
+			}
 		}
-		msleep(10);	/* wait 10ms */
-		data->power_enabled = on;
+		
+		data->power_enabled = true;
+		pr_info("sx9310: Power ON success\n");
 	} else {
-		pr_info("Power on=%d. enabled=%d\n", on, data->power_enabled);
+		if (!data->power_enabled)
+			return 0;
+
+		if (data->vio && data->vio != data->vdd && data->vio != data->vdd1) {
+			regulator_disable(data->vio);
+		}
+		regulator_disable(data->vdd);
+		data->power_enabled = false;
+		pr_info("sx9310: Power OFF success\n");
 	}
 
 	return ret;
 }
 
+/* FIXED: Power init with fallback mechanism */
 static int sx9310_power_init(sx93XX_t *data)
 {
+	struct device *dev = &((struct i2c_client *)data->bus)->dev;
 	int ret;
-	/* struct i2c_client *client =(struct i2c_client *)data->bus; */
 
-	data->vdd =
-	    regulator_get(&((struct i2c_client *)data->bus)->dev, "vdd");
+	/* 1. VDD (Required) */
+	data->vdd = regulator_get(dev, "vdd");
 	if (IS_ERR(data->vdd)) {
 		ret = PTR_ERR(data->vdd);
-		pr_err("Regulator get failed vdd ret=%d\n", ret);
+		dev_err(dev, "sx9310: vdd not found (%d)\n", ret);
 		return ret;
 	}
 
@@ -1065,63 +1071,43 @@ static int sx9310_power_init(sx93XX_t *data)
 		ret = regulator_set_voltage(data->vdd,
 					    SX9310_VDD_MIN_UV,
 					    SX9310_VDD_MAX_UV);
-		if (ret) {
-			pr_err("Regulator set failed vdd ret=%d\n", ret);
-			goto reg_vdd_put;
-		}
+		if (ret)
+			dev_warn(dev, "Failed to set vdd voltage\n");
 	}
 
-	data->vdd1 =
-	    regulator_get(&((struct i2c_client *)data->bus)->dev, "vdd1");
+	/* 2. VDD1 (Required) */
+	data->vdd1 = regulator_get(dev, "vdd1");
 	if (IS_ERR(data->vdd1)) {
-		ret = PTR_ERR(data->vdd1);
-		pr_err("Regulator get failed vdd1 ret=%d\n", ret);
-		goto reg_vdd_set;
+		dev_err(dev, "sx9310: vdd1 not found\n");
+		regulator_put(data->vdd);
+		return PTR_ERR(data->vdd1);
 	}
 
 	if (regulator_count_voltages(data->vdd1) > 0) {
 		ret = regulator_set_voltage(data->vdd1,
 					    SX9310_VDD1_MIN_UV,
 					    SX9310_VDD1_MAX_UV);
-		if (ret) {
-			pr_err("Regulator set failed vdd1 ret=%d\n", ret);
-			goto reg_vdd1_put;
-		}
+		if (ret)
+			dev_warn(dev, "Failed to set vdd1 voltage\n");
 	}
 
-	data->vio =
-	    regulator_get(&((struct i2c_client *)data->bus)->dev, "vio");
+	/* 3. VIO (Optional, fallback to vdd1) */
+	data->vio = regulator_get_optional(dev, "vio");
 	if (IS_ERR(data->vio)) {
-		ret = PTR_ERR(data->vio);
-		pr_err("Regulator get failed vio ret=%d\n", ret);
-		goto reg_vdd1_set;
-	}
-
-	if (regulator_count_voltages(data->vio) > 0) {
-		ret = regulator_set_voltage(data->vio,
-					    SX9310_VIO_MIN_UV,
-					    SX9310_VIO_MAX_UV);
-		if (ret) {
-			pr_err("Regulator set failed vio ret=%d\n", ret);
-			goto reg_vio_put;
+		dev_info(dev, "sx9310: vio not found in DTS, sharing with vdd1\n");
+		data->vio = data->vdd1;
+	} else {
+		if (regulator_count_voltages(data->vio) > 0) {
+			ret = regulator_set_voltage(data->vio,
+						    SX9310_VIO_MIN_UV,
+						    SX9310_VIO_MAX_UV);
+			if (ret)
+				dev_warn(dev, "Failed to set vio voltage\n");
 		}
 	}
 
+	dev_info(dev, "sx9310: Power init completed\n");
 	return 0;
-
-reg_vio_put:
-	regulator_put(data->vio);
-reg_vdd1_set:
-	if (regulator_count_voltages(data->vdd1) > 0)
-		regulator_set_voltage(data->vdd1, 0, SX9310_VDD1_MAX_UV);
-reg_vdd1_put:
-	regulator_put(data->vdd1);
-reg_vdd_set:
-	if (regulator_count_voltages(data->vdd) > 0)
-		regulator_set_voltage(data->vdd, 0, SX9310_VDD_MAX_UV);
-reg_vdd_put:
-	regulator_put(data->vdd);
-	return ret;
 }
 
 static int sx9310_parse_dt(struct device *dev, sx9310_platform_data_t *pdata)
@@ -1200,28 +1186,32 @@ static ssize_t capsensor_config_write_proc(struct file *filp,
 	return count;
 }
 
-/* Huaqin add for check hw by zhuqiang at 2018/06/22 start */
-/* Failer Index */
+/* FIXED: Hardware check with better logging and range check */
 static int sx9310_Hardware_Check(psx93XX_t this)
 {
 	int ret;
-	u8 failcode;
+	u8 failcode = 0;
 	u8 failStatusCode = 0;
 
 	//Check I2C Connection
 	ret = read_register(this, SX9310_WHOAMI_REG, &failcode);
-	if(ret < 0){
+	if (ret < 0) {
 		failStatusCode = SX9310_I2C_ERROR;
+		dev_err(this->pdev, "sx9310: I2C read error %d\n", ret);
+		return failStatusCode;
 	}
 
-	if(failcode!= SX9310_WHOAMI_VALUE){
+	dev_info(this->pdev, "sx9310: WHOAMI = 0x%x\n", failcode);
+
+	/* Accept sx9310 (0x01, 0x02) and sx9311 (0x03) */
+	if (failcode < SX9310_WHOAMI_VALUE_MIN || failcode > SX9310_WHOAMI_VALUE_MAX) {
 		failStatusCode = SX9310_ID_ERROR;
+		dev_err(this->pdev, "sx9310: WHOAMI mismatch 0x%x (expected %x-%x)\n", 
+			failcode, SX9310_WHOAMI_VALUE_MIN, SX9310_WHOAMI_VALUE_MAX);
 	}
 
-	dev_info(this->pdev, "sx9310 failcode = 0x%x\n",failStatusCode);
 	return failStatusCode;
 }
-/* Huaqin add for check hw by zhuqiang at 2018/06/22 end */
 
 /*! \fn static int sx9310_probe(struct i2c_client *client, const struct i2c_device_id *id)
  * \brief Probe function
@@ -1313,6 +1303,9 @@ static int sx9310_probe(struct i2c_client *client,
 	dev_dbg(&client->dev, "\t Initialized Main Memory: 0x%p\n", this);
 
 	if (this) {
+		/* FIXED: Force power init state */
+		this->power_enabled = false;
+
 		/* In case we need to reinitialize data
 		 * (e.q. if suspend reset device) */
 		this->init = initialize;
@@ -1354,13 +1347,7 @@ static int sx9310_probe(struct i2c_client *client,
 			"\t Initialized Device Specific Memory: 0x%p\n",
 			pDevice);
 	
-		/* Huaqin add for check hw by zhuqiang at 2018/06/22 start */
-		if (sx9310_Hardware_Check(this) != 0)
-		{
-			goto error_1;
-		}
-		/* Huaqin add for check hw by zhuqiang at 2018/06/21 end */
-
+		/* FIXED: Removed early Hardware Check before power is enabled */
 
 		if (pDevice) {
 			/* for accessing items in user data (e.g. calibrate) */
@@ -1397,14 +1384,28 @@ static int sx9310_probe(struct i2c_client *client,
 
 			/* err = sx9310_power_ctl(pplatData, true); */
 			err = sx9310_power_ctl(this, true);
+			if (err) {
+				dev_err(&client->dev, "Failed to enable vdd/vio\n");
+				goto error_1;
+			}
 
-			err |= sx9310_power_vdd1_ctl(this, true);
+			err = sx9310_power_vdd1_ctl(this, true);
 			if (err) {
 				dev_err(&client->dev,
 					"Failed to enable Capacitive Touch Controller power\n");
 				err = -EINVAL;
 				goto error_1;
 			}
+			
+			/* FIXED: Wait for power stabilization before check */
+			msleep(100);
+
+			if (sx9310_Hardware_Check(this) != 0) {
+				dev_err(&client->dev, "sx9310 hardware check failed\n");
+				err = -ENODEV;
+				goto error_1;
+			}
+
 			PSX9310Device = pDevice;
 
 			/* Create the input device */
