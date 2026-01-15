@@ -1736,6 +1736,10 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 		 * holding rq->lock.
 		 */
 		lockdep_assert_held(&rq->lock);
+		
+		/* FIX: Update clock before dequeue to prevent WARNINGs */
+		update_rq_clock(rq);
+		
 		dequeue_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
 	}
 	if (running)

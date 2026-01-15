@@ -716,10 +716,8 @@
 #define KEY_TP_GESTURE_SWIPE_RIGHT	759
 #endif
 
-#ifdef CONFIG_MACH_ASUS_X00TD
 #define KEY_SARSENSOR_NEAR		0x2ea
 #define KEY_SARSENSOR_FAR		0x2eb
-#endif
 
 /* We avoid low common keys in module aliases so they don't get huge. */
 #define KEY_MIN_INTERESTING	KEY_MUTE
