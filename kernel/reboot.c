@@ -31,7 +31,6 @@ EXPORT_SYMBOL(cad_pid);
 #define DEFAULT_REBOOT_MODE
 #endif
 enum reboot_mode reboot_mode DEFAULT_REBOOT_MODE;
-enum reboot_mode panic_reboot_mode = REBOOT_UNDEFINED;
 
 /*
  * This variable is used privately to keep track of whether or not
@@ -519,8 +518,6 @@ EXPORT_SYMBOL_GPL(orderly_reboot);
 static int __init reboot_setup(char *str)
 {
 	for (;;) {
-		enum reboot_mode *mode;
-
 		/*
 		 * Having anything passed on the command line via
 		 * reboot= will cause us to disable DMI checking
@@ -528,45 +525,38 @@ static int __init reboot_setup(char *str)
 		 */
 		reboot_default = 0;
 
-		if (!strncmp(str, "panic_", 6)) {
-			mode = &panic_reboot_mode;
-			str += 6;
-		} else {
-			mode = &reboot_mode;
-		}
-
 		switch (*str) {
 		case 'w':
-			*mode = REBOOT_WARM;
+			reboot_mode = REBOOT_WARM;
 			break;
 
 		case 'c':
-			*mode = REBOOT_COLD;
+			reboot_mode = REBOOT_COLD;
 			break;
 
 		case 'h':
-			*mode = REBOOT_HARD;
+			reboot_mode = REBOOT_HARD;
 			break;
 
 		case 's':
-		{
-			int rc;
-
-			if (isdigit(*(str+1))) {
-				rc = kstrtoint(str+1, 0, &reboot_cpu);
-				if (rc)
-					return rc;
-			} else if (str[1] == 'm' && str[2] == 'p' &&
-				   isdigit(*(str+3))) {
-				rc = kstrtoint(str+3, 0, &reboot_cpu);
-				if (rc)
-					return rc;
-			} else
-				*mode = REBOOT_SOFT;
+			if (isdigit(*(str+1)))
+				reboot_cpu = simple_strtoul(str+1, NULL, 0);
+			else if (str[1] == 'm' && str[2] == 'p' &&
+							isdigit(*(str+3)))
+				reboot_cpu = simple_strtoul(str+3, NULL, 0);
+			else
+				reboot_mode = REBOOT_SOFT;
+			if (reboot_cpu >= num_possible_cpus()) {
+				pr_err("Ignoring the CPU number in reboot= option. "
+				       "CPU %d exceeds possible cpu number %d\n",
+				       reboot_cpu, num_possible_cpus());
+				reboot_cpu = 0;
+				break;
+			}
 			break;
-		}
+
 		case 'g':
-			*mode = REBOOT_GPIO;
+			reboot_mode = REBOOT_GPIO;
 			break;
 
 		case 'b':

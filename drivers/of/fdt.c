@@ -81,98 +81,6 @@ void of_fdt_limit_memory(int limit)
 }
 
 /**
- * of_fdt_get_ddrhbb - Return the highest bank bit of ddr on the current device
- *
- * On match, returns a non-zero positive value which matches the highest bank
- * bit.
- * Otherwise returns -ENOENT.
- */
-int of_fdt_get_ddrhbb(int channel, int rank)
-{
-	int memory;
-	int len;
-	int ret;
-	/* Single spaces reserved for channel(0-9), rank(0-9) */
-	char pname[] = "ddr_device_hbb_ch _rank ";
-	fdt32_t *prop = NULL;
-
-	memory = fdt_path_offset(initial_boot_params, "/memory");
-	if (memory > 0) {
-		snprintf(pname, sizeof(pname),
-			 "ddr_device_hbb_ch%d_rank%d", channel, rank);
-		prop = fdt_getprop_w(initial_boot_params, memory,
-				     pname, &len);
-	}
-
-	if (!prop || len != sizeof(u32))
-		return -ENOENT;
-
-	ret = fdt32_to_cpu(*prop);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(of_fdt_get_ddrhbb);
-
-/**
- * of_fdt_get_ddrrank - Return the rank of ddr on the current device
- *
- * On match, returns a non-zero positive value which matches the ddr rank.
- * Otherwise returns -ENOENT.
- */
-int of_fdt_get_ddrrank(int channel)
-{
-	int memory;
-	int len;
-	int ret;
-	/* Single space reserved for channel(0-9) */
-	char pname[] = "ddr_device_rank_ch ";
-	fdt32_t *prop = NULL;
-
-	memory = fdt_path_offset(initial_boot_params, "/memory");
-	if (memory > 0) {
-		snprintf(pname, sizeof(pname),
-			 "ddr_device_rank_ch%d", channel);
-		prop = fdt_getprop_w(initial_boot_params, memory,
-				     pname, &len);
-	}
-
-	if (!prop || len != sizeof(u32))
-		return -ENOENT;
-
-	ret = fdt32_to_cpu(*prop);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(of_fdt_get_ddrrank);
-
-/**
- * of_fdt_get_ddrtype - Return the type of ddr (4/5) on the current device
- *
- * On match, returns a non-zero positive value which matches the ddr type.
- * Otherwise returns -ENOENT.
- */
-int of_fdt_get_ddrtype(void)
-{
-	int memory;
-	int len;
-	int ret;
-	fdt32_t *prop = NULL;
-
-	memory = fdt_path_offset(initial_boot_params, "/memory");
-	if (memory > 0)
-		prop = fdt_getprop_w(initial_boot_params, memory,
-				  "ddr_device_type", &len);
-
-	if (!prop || len != sizeof(u32))
-		return -ENOENT;
-
-	ret = fdt32_to_cpu(*prop);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(of_fdt_get_ddrtype);
-
-/**
  * of_fdt_is_compatible - Return true if given node from the given blob has
  * compat in its compatible list
  * @blob: A device tree blob
@@ -484,7 +392,7 @@ static int unflatten_dt_nodes(const void *blob,
 	for (offset = 0;
 	     offset >= 0 && depth >= initial_depth;
 	     offset = fdt_next_node(blob, offset, &depth)) {
-		if (WARN_ON_ONCE(depth >= FDT_MAX_DEPTH))
+		if (WARN_ON_ONCE(depth >= FDT_MAX_DEPTH - 1))
 			continue;
 
 		if (!IS_ENABLED(CONFIG_OF_KOBJ) &&
@@ -669,11 +577,11 @@ static int __init __reserved_mem_reserve_reg(unsigned long node,
 
 		if (size &&
 		    early_init_dt_reserve_memory_arch(base, size, nomap) == 0)
-			pr_debug("Reserved memory: reserved region for node '%s': base %pa, size %ld MiB\n",
-				uname, &base, (unsigned long)size / SZ_1M);
+			pr_debug("Reserved memory: reserved region for node '%s': base %pa, size %lu MiB\n",
+				uname, &base, (unsigned long)(size / SZ_1M));
 		else
-			pr_info("Reserved memory: failed to reserve memory for node '%s': base %pa, size %ld MiB\n",
-				uname, &base, (unsigned long)size / SZ_1M);
+			pr_info("Reserved memory: failed to reserve memory for node '%s': base %pa, size %lu MiB\n",
+				uname, &base, (unsigned long)(size / SZ_1M));
 
 		len -= t_len;
 		if (first) {
@@ -1165,67 +1073,43 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 	return 0;
 }
 
-/*
- * Convert configs to something easy to use in C code
- */
-#if defined(CONFIG_CMDLINE_FORCE)
-static const int overwrite_incoming_cmdline = 1;
-static const int read_dt_cmdline;
-static const int concat_cmdline;
-#elif defined(CONFIG_CMDLINE_EXTEND)
-static const int overwrite_incoming_cmdline;
-static const int read_dt_cmdline = 1;
-static const int concat_cmdline = 1;
-#else /* CMDLINE_FROM_BOOTLOADER */
-static const int overwrite_incoming_cmdline;
-static const int read_dt_cmdline = 1;
-static const int concat_cmdline;
-#endif
-
-#ifdef CONFIG_CMDLINE
-static const char *config_cmdline = CONFIG_CMDLINE;
-#else
-static const char *config_cmdline = "";
-#endif
-
 int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 				     int depth, void *data)
 {
-	int l = 0;
-	const char *p = NULL;
-	char *cmdline = data;
+	int l;
+	const char *p;
 	const void *rng_seed;
 
 	pr_debug("search \"chosen\", depth: %d, uname: %s\n", depth, uname);
 
-	if (depth != 1 || !cmdline ||
+	if (depth != 1 || !data ||
 	    (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
 		return 0;
 
 	early_init_dt_check_for_initrd(node);
 
-	/* Put CONFIG_CMDLINE in if forced or if data had nothing in it to start */
-	if (overwrite_incoming_cmdline || !cmdline[0])
-		strlcpy(cmdline, config_cmdline, COMMAND_LINE_SIZE);
+	/* Retrieve command line */
+	p = of_get_flat_dt_prop(node, "bootargs", &l);
+	if (p != NULL && l > 0)
+		strlcpy(data, p, min((int)l, COMMAND_LINE_SIZE));
 
-	/* Retrieve command line unless forcing */
-	if (read_dt_cmdline)
-		p = of_get_flat_dt_prop(node, "bootargs", &l);
-
-	if (p != NULL && l > 0) {
-		if (concat_cmdline) {
-			int cmdline_len;
-			int copy_len;
-			strlcat(cmdline, " ", COMMAND_LINE_SIZE);
-			cmdline_len = strlen(cmdline);
-			copy_len = COMMAND_LINE_SIZE - cmdline_len - 1;
-			copy_len = min((int)l, copy_len);
-			strncpy(cmdline + cmdline_len, p, copy_len);
-			cmdline[cmdline_len + copy_len] = '\0';
-		} else {
-			strlcpy(cmdline, p, min((int)l, COMMAND_LINE_SIZE));
-		}
-	}
+	/*
+	 * CONFIG_CMDLINE is meant to be a default in case nothing else
+	 * managed to set the command line, unless CONFIG_CMDLINE_FORCE
+	 * is set in which case we override whatever was found earlier.
+	 */
+#ifdef CONFIG_CMDLINE
+#if defined(CONFIG_CMDLINE_EXTEND)
+	strlcat(data, " ", COMMAND_LINE_SIZE);
+	strlcat(data, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
+#elif defined(CONFIG_CMDLINE_FORCE)
+	strlcpy(data, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
+#else
+	/* No arguments from boot loader, use kernel's  cmdl*/
+	if (!((char *)data)[0])
+		strlcpy(data, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
+#endif
+#endif /* CONFIG_CMDLINE */
 
 	pr_debug("Command line is: %s\n", (char*)data);
 

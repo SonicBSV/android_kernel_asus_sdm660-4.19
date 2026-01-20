@@ -190,10 +190,6 @@ alternative_cb_end
 
 	apply_ssbd 1, x22, x23
 
-#ifdef CONFIG_SHADOW_CALL_STACK
-	ldr	x18, [tsk, #TSK_TI_SCS]		// Restore shadow call stack
-	str	xzr, [tsk, #TSK_TI_SCS]		// Limit visibility of saved SCS
-#endif
 	.else
 	add	x21, sp, #S_FRAME_SIZE
 	get_thread_info tsk
@@ -285,12 +281,6 @@ alternative_else_nop_endif
 	ct_user_enter
 	.endif
 
-#ifdef CONFIG_SHADOW_CALL_STACK
-	.if	\el == 0
-	str	x18, [tsk, #TSK_TI_SCS]		// Save shadow call stack
-	.endif
-#endif
-
 #ifdef CONFIG_ARM64_SW_TTBR0_PAN
 	/*
 	 * Restore access to TTBR0_EL1. If returning to EL0, no need for SPSR
@@ -367,7 +357,7 @@ alternative_else_nop_endif
 	.if	\el == 0
 alternative_if_not ARM64_UNMAP_KERNEL_AT_EL0
 	ldr	lr, [sp, #S_LR]
-	add	sp, sp, #S_FRAME_SIZE 		//restore sp
+	add	sp, sp, #S_FRAME_SIZE		// restore sp
 	eret
 alternative_else_nop_endif
 #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
@@ -388,9 +378,6 @@ alternative_else_nop_endif
 
 	.macro	irq_stack_entry
 	mov	x19, sp			// preserve the original sp
-#ifdef CONFIG_SHADOW_CALL_STACK
-	mov	x20, x18		// preserve the original shadow stack
-#endif
 
 	/*
 	 * Compare sp with the base of the task stack.
@@ -408,24 +395,15 @@ alternative_else_nop_endif
 
 	/* switch to the irq stack */
 	mov	sp, x26
-
-#ifdef CONFIG_SHADOW_CALL_STACK
-	/* also switch to the irq shadow stack */
-	ldr_this_cpu x18, irq_shadow_call_stack_ptr, x26
-#endif
-
 9998:
 	.endm
 
 	/*
-	 * The callee-saved regs (x19-x29) should be preserved between
-	 * irq_stack_entry and irq_stack_exit.
+	 * x19 should be preserved between irq_stack_entry and
+	 * irq_stack_exit.
 	 */
 	.macro	irq_stack_exit
 	mov	sp, x19
-#ifdef CONFIG_SHADOW_CALL_STACK
-	mov	x18, x20
-#endif
 	.endm
 
 /*
@@ -601,7 +579,7 @@ el1_da:
 	 */
 	mrs	x3, far_el1
 	inherit_daif	pstate=x23, tmp=x2
-	untagged_addr x0, x3
+	clear_address_tag x0, x3
 	mov	x2, sp				// struct pt_regs
 	bl	do_mem_abort
 
@@ -730,9 +708,9 @@ el0_sync_compat:
 	cmp	x24, #ESR_ELx_EC_UNKNOWN	// unknown exception in EL0
 	b.eq	el0_undef
 	cmp	x24, #ESR_ELx_EC_CP15_32	// CP15 MRC/MCR trap
-	b.eq	el0_cp15
+	b.eq	el0_undef
 	cmp	x24, #ESR_ELx_EC_CP15_64	// CP15 MRRC/MCRR trap
-	b.eq	el0_cp15
+	b.eq	el0_undef
 	cmp	x24, #ESR_ELx_EC_CP14_MR	// CP14 MRC/MCR trap
 	b.eq	el0_undef
 	cmp	x24, #ESR_ELx_EC_CP14_LS	// CP14 LDC/STC trap
@@ -755,17 +733,6 @@ el0_irq_compat:
 el0_error_compat:
 	kernel_entry 0, 32
 	b	el0_error_naked
-
-el0_cp15:
-	/*
-	 * Trapped CP15 (MRC, MCR, MRRC, MCRR) instructions
-	 */
-	enable_daif
-	ct_user_exit
-	mov	x0, x25
-	mov	x1, sp
-	bl	do_cp15instr
-	b	ret_to_user
 #endif
 
 el0_da:
@@ -775,7 +742,7 @@ el0_da:
 	mrs	x26, far_el1
 	enable_daif
 	ct_user_exit
-	untagged_addr x0, x26
+	clear_address_tag x0, x26
 	mov	x1, x25
 	mov	x2, sp
 	bl	do_mem_abort
@@ -1084,11 +1051,11 @@ alternative_endif
 	.if	\regsize == 64
 	mrs	x29, far_el1
 	.endif
-	add	sp, sp, #S_FRAME_SIZE   //restore sp
+	add	sp, sp, #S_FRAME_SIZE		// restore sp
 	eret
 	.endm
 
-	.macro	generate_tramp_vector, kpti, bhb
+	.macro	generate_tramp_vector,	kpti, bhb
 .Lvector_start\@:
 	.space	0x400
 
@@ -1101,11 +1068,11 @@ alternative_endif
 	.endm
 
 #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
-	/*
-	 * Exception vectors trampoline.
-	 * The order must match __bp_harden_el1_vectors and the
-	 * arm64_bp_harden_el1_vectors enum.
-	 */
+/*
+ * Exception vectors trampoline.
+ * The order must match __bp_harden_el1_vectors and the
+ * arm64_bp_harden_el1_vectors enum.
+ */
 	.pushsection ".entry.tramp.text", "ax"
 	.align	11
 ENTRY(tramp_vectors)
@@ -1138,7 +1105,7 @@ __entry_tramp_data_vectors:
 __entry_tramp_data___sdei_asm_handler:
 	.quad	__sdei_asm_handler
 #endif /* CONFIG_ARM_SDE_INTERFACE */
-	__entry_tramp_data_this_cpu_vector:
+__entry_tramp_data_this_cpu_vector:
 	.quad	this_cpu_vector
 	.popsection				// .rodata
 #endif /* CONFIG_RANDOMIZE_BASE */
@@ -1148,26 +1115,26 @@ __entry_tramp_data___sdei_asm_handler:
  * Exception vectors for spectre mitigations on entry from EL1 when
  * kpti is not in use.
  */
-
 	.macro generate_el1_vector, bhb
 .Lvector_start\@:
-	kernel_ventry	1, sync_invalid		// Synchronous EL1t
-	kernel_ventry	1, irq_invalid		// IRQ EL1t
-	kernel_ventry	1, fiq_invalid		// FIQ EL1t
-	kernel_ventry	1, error_invalid	// Error EL1t
+	kernel_ventry	1, sync_invalid			// Synchronous EL1t
+	kernel_ventry	1, irq_invalid			// IRQ EL1t
+	kernel_ventry	1, fiq_invalid			// FIQ EL1t
+	kernel_ventry	1, error_invalid		// Error EL1t
 
-	kernel_ventry	1, sync			// Synchronous EL1h
-	kernel_ventry	1, irq			// IRQ EL1h
-	kernel_ventry	1, fiq_invalid		// FIQ EL1h
-	kernel_ventry	1, error		// Error EL1h
+	kernel_ventry	1, sync				// Synchronous EL1h
+	kernel_ventry	1, irq				// IRQ EL1h
+	kernel_ventry	1, fiq_invalid			// FIQ EL1h
+	kernel_ventry	1, error			// Error EL1h
 
 	.rept	4
 	tramp_ventry	.Lvector_start\@, 64, 0, \bhb
 	.endr
-	.rept	4
+	.rept 4
 	tramp_ventry	.Lvector_start\@, 32, 0, \bhb
 	.endr
 	.endm
+
 /* The order must match tramp_vecs and the arm64_bp_harden_el1_vectors enum. */
 	.pushsection ".entry.text", "ax"
 	.align	11
@@ -1210,11 +1177,6 @@ ENTRY(cpu_switch_to)
 	ldr	lr, [x8]
 	mov	sp, x9
 	msr	sp_el0, x1
-#ifdef CONFIG_SHADOW_CALL_STACK
-	str	x18, [x0, #TSK_TI_SCS]
-	ldr	x18, [x1, #TSK_TI_SCS]
-	str	xzr, [x1, #TSK_TI_SCS]		// limit visibility of saved SCS
-#endif
 	ret
 ENDPROC(cpu_switch_to)
 NOKPROBE(cpu_switch_to)
@@ -1272,7 +1234,7 @@ ENTRY(__sdei_asm_entry_trampoline)
 	 */
 1:	str	x4, [x1, #(SDEI_EVENT_INTREGS + S_ORIG_ADDR_LIMIT)]
 
-	tramp_data_read_var	x4, __sdei_asm_handler
+	tramp_data_read_var     x4, __sdei_asm_handler
 	br	x4
 ENDPROC(__sdei_asm_entry_trampoline)
 NOKPROBE(__sdei_asm_entry_trampoline)
