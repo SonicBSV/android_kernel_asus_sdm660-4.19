@@ -15,6 +15,7 @@
 #include <linux/bpf.h>
 #include <linux/bpf-cgroup.h>
 #include <net/sock.h>
+#include <linux/sysctl.h>
 
 DEFINE_STATIC_KEY_FALSE(cgroup_bpf_enabled_key);
 EXPORT_SYMBOL(cgroup_bpf_enabled_key);
@@ -721,4 +722,92 @@ const struct bpf_prog_ops cg_dev_prog_ops = {
 const struct bpf_verifier_ops cg_dev_verifier_ops = {
 	.get_func_proto		= cgroup_dev_func_proto,
 	.is_valid_access	= cgroup_dev_is_valid_access,
+};
+
+/**
+ * __cgroup_bpf_run_filter_sysctl - Run a program on sysctl
+ *
+ * @head: sysctl table header
+ * @table: sysctl table
+ * @write: sysctl is being read (= 0) or written (= 1)
+ * @buf: pointer to buffer
+ * @pcount: value-result argument
+ * @ppos: value-result argument
+ * @new_buf: pointer to new buffer
+ * @type: attach type
+ *
+ * Return: 0 to allow, -EPERM on error
+ */
+int __cgroup_bpf_run_filter_sysctl(struct ctl_table_header *head,
+				   struct ctl_table *table, int write,
+				   void __user *buf, size_t *pcount,
+				   loff_t *ppos, void **new_buf,
+				   enum bpf_attach_type type)
+{
+	/* TODO: Full implementation from v5.4 */
+	return 0;
+}
+EXPORT_SYMBOL(__cgroup_bpf_run_filter_sysctl);
+
+int __cgroup_bpf_run_filter_setsockopt(struct sock *sk, int *level,
+				       int *optname, char __user *optval,
+				       int *optlen, char **kernel_optval)
+{
+	/* TODO: Full implementation from v5.4 */
+	return 0;
+}
+EXPORT_SYMBOL(__cgroup_bpf_run_filter_setsockopt);
+
+int __cgroup_bpf_run_filter_getsockopt(struct sock *sk, int level,
+				       int optname, char __user *optval,
+				       int __user *optlen, int max_optlen,
+				       int retval)
+{
+	/* TODO: Full implementation from v5.4 */
+	return retval;
+}
+EXPORT_SYMBOL(__cgroup_bpf_run_filter_getsockopt);
+
+static const struct bpf_func_proto *
+sysctl_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+{
+	return NULL;
+}
+
+static bool sysctl_is_valid_access(int off, int size,
+				   enum bpf_access_type type,
+				   const struct bpf_prog *prog,
+				   struct bpf_insn_access_aux *info)
+{
+	return false;
+}
+
+const struct bpf_verifier_ops cg_sysctl_verifier_ops = {
+	.get_func_proto		= sysctl_func_proto,
+	.is_valid_access	= sysctl_is_valid_access,
+};
+
+const struct bpf_prog_ops cg_sysctl_prog_ops = {
+};
+
+static const struct bpf_func_proto *
+cg_sockopt_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+{
+	return NULL;
+}
+
+static bool cg_sockopt_is_valid_access(int off, int size,
+				       enum bpf_access_type type,
+				       const struct bpf_prog *prog,
+				       struct bpf_insn_access_aux *info)
+{
+	return false;
+}
+
+const struct bpf_verifier_ops cg_sockopt_verifier_ops = {
+	.get_func_proto		= cg_sockopt_func_proto,
+	.is_valid_access	= cg_sockopt_is_valid_access,
+};
+
+const struct bpf_prog_ops cg_sockopt_prog_ops = {
 };
