@@ -7,6 +7,8 @@
 # export CROSS_COMPILE=arm-linux-gnueabihf-
 # export KDIR=../linux
 
+ccflags-y += -I$(srctree)/techpack/audio/asoc/codecs/tfa9874/inc
+subdir-ccflags-y += -I$(srctree)/techpack/audio/asoc/codecs/tfa9874/inc
 
 # In case of out of tree build, build as a module
 # (when build inside kernel we will not enter this directory and this will have no effect)
