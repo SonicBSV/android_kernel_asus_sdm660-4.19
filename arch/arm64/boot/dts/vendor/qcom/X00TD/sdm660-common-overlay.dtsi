@@ -17,7 +17,7 @@
 };
 
 &usb3 {
-    extcon = <&pm660_charger>;
+    extcon = <&pm660_charger>, <&x00td_otg_id>;
     vbus_dwc3-supply = <&smb2_vbus>;
     
     dwc3@a800000 {

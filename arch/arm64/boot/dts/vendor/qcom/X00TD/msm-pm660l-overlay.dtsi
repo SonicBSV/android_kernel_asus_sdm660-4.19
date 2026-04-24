@@ -10,6 +10,15 @@
  * GNU General Public License for more details.
  */
 
+/ {
+	x00td_otg_id: x00td-otg-extcon {
+		compatible = "asus,x00td-otg-extcon";
+		qcom,otg-id-gpio = <&pm660l_gpios 9 0>;
+		qcom,poll-interval-ms = <500>;
+		status = "okay";
+	};
+};
+
 &pm660l_lpg {
 
     // Green

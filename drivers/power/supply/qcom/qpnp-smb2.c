@@ -20,6 +20,8 @@
 #include "smb-lib.h"
 #include "storm-watch.h"
 #include <linux/pmic-voter.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #define SMB2_DEFAULT_WPWR_UW	8000000
 
@@ -390,6 +392,9 @@ static int smb2_parse_dt(struct smb2 *chip)
 
 	chg->fcc_stepper_enable = of_property_read_bool(node,
 					"qcom,fcc-stepping-enable");
+
+	chg->uusb_host_extcon_external = of_property_read_bool(node,
+					"qcom,uusb-host-extcon-external");
 
 	chg->ufp_only_mode = of_property_read_bool(node,
 					"qcom,ufp-only-mode");
@@ -2520,7 +2525,10 @@ static int smb2_probe(struct platform_device *pdev)
 	}
 
 	/* extcon registration */
-	chg->extcon = devm_extcon_dev_allocate(chg->dev, smblib_extcon_cable);
+		chg->extcon = devm_extcon_dev_allocate(chg->dev,
+			chg->uusb_host_extcon_external ?
+			smblib_extcon_usb_only_cable :
+			smblib_extcon_cable);
 	if (IS_ERR(chg->extcon)) {
 		rc = PTR_ERR(chg->extcon);
 		dev_err(chg->dev, "failed to allocate extcon device rc=%d\n",
