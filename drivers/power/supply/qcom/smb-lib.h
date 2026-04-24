@@ -351,6 +351,8 @@ struct smb_charger {
 	/* ASUS X00TD BSP */
 	bool			x00td_otg_active;
 	bool			x00td_charging_flow_active;
+	bool			uusb_gpio_otg_quirk;
+	int			otg_id_gpio;
 	bool			is_audio_adapter;
 	bool			disable_stat_sw_override;
 	bool			in_chg_lock;

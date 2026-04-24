@@ -16,6 +16,7 @@
 #include "battery.h"
 #include "step-chg-jeita.h"
 #include "storm-watch.h"
+#include <linux/gpio.h>
 
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
@@ -3640,6 +3641,9 @@ static void smblib_micro_usb_plugin(struct smb_charger *chg, bool vbus_rising)
 		smblib_update_usb_type(chg);
 		extcon_set_state_sync(chg->extcon, EXTCON_USB, false);
 		smblib_uusb_removal(chg);
+
+		if (chg->uusb_gpio_otg_quirk)
+			mod_delayed_work(system_wq, &chg->uusb_otg_work, 0);
 	}
 }
 
@@ -4893,13 +4897,12 @@ int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
  ***************/
 static void smblib_uusb_otg_work(struct work_struct *work)
 {
-	struct smb_charger *chg = container_of(work, struct smb_charger,
-						uusb_otg_work.work);
+	struct smb_charger *chg = container_of(work, struct smb_charger, uusb_otg_work.work);
 	union power_supply_propval pval = { 0, };
 	int rc;
 	u8 stat;
 	bool usb_present = false;
-	bool otg;
+	bool otg = false;
 
 	rc = smblib_read(chg, TYPE_C_STATUS_3_REG, &stat);
 	if (rc < 0) {
@@ -4908,29 +4911,33 @@ static void smblib_uusb_otg_work(struct work_struct *work)
 	}
 
 	rc = smblib_get_prop_usb_present(chg, &pval);
-	if (rc >= 0)
-		usb_present = !!pval.intval;
+	if (rc >= 0) usb_present = !!pval.intval;
 
-	otg = !usb_present &&
-	      !!(stat & (U_USB_GND_NOVBUS_BIT | U_USB_GND_BIT));
-
-	if (otg) {
-		extcon_set_state_sync(chg->extcon, EXTCON_USB, false);
-		extcon_set_state_sync(chg->extcon, EXTCON_USB_HOST, true);
-		chg->otg_present = true;
+	if (chg->uusb_gpio_otg_quirk && gpio_is_valid(chg->otg_id_gpio)) {
+		/* X00TD: Тот самый рабочий пин 10. Активный 0 = вставлен */
+		otg = (gpio_get_value(chg->otg_id_gpio) == 0);
 	} else {
-		extcon_set_state_sync(chg->extcon, EXTCON_USB_HOST, false);
-		extcon_set_state_sync(chg->extcon, EXTCON_USB, usb_present);
-		chg->otg_present = false;
+		/* Стандартный алгоритм для X01BD */
+		otg = !usb_present && !!(stat & (U_USB_GND_NOVBUS_BIT | U_USB_GND_BIT));
 	}
 
-	smblib_dbg(chg, PR_REGISTER,
-		   "TYPE_C_STATUS_3=0x%02x usb=%d OTG=%d\n",
-		   stat, usb_present, otg);
-
-	power_supply_changed(chg->usb_psy);
+	if (chg->otg_present != otg) {
+		extcon_set_state_sync(chg->extcon, EXTCON_USB_HOST, otg);
+		chg->otg_present = otg;
+		power_supply_changed(chg->usb_psy);
+	}
 
 out:
+	if (chg->uusb_gpio_otg_quirk) {
+		/* 
+		 * Поллим раз в секунду только если нет зарядки, либо если активен OTG.
+		 * Если идет зарядка - воркер спит и не мешает.
+		 */
+		if (!usb_present || otg) {
+			schedule_delayed_work(&chg->uusb_otg_work, msecs_to_jiffies(1000));
+			return;
+		}
+	}
 	vote(chg->awake_votable, OTG_DELAY_VOTER, false, 0);
 }
 

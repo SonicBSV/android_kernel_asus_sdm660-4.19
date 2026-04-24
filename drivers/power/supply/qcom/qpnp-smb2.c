@@ -20,6 +20,8 @@
 #include "smb-lib.h"
 #include "storm-watch.h"
 #include <linux/pmic-voter.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
 
 #define SMB2_DEFAULT_WPWR_UW	8000000
 
@@ -393,6 +395,20 @@ static int smb2_parse_dt(struct smb2 *chip)
 
 	chg->ufp_only_mode = of_property_read_bool(node,
 					"qcom,ufp-only-mode");
+
+	/* X00TD: Читаем рабочий GPIO 10 для OTG */
+	chg->uusb_gpio_otg_quirk = of_property_read_bool(node, "qcom,uusb-gpio-otg-quirk");
+	chg->otg_id_gpio = -EINVAL;
+	
+	if (chg->uusb_gpio_otg_quirk) {
+		chg->otg_id_gpio = of_get_named_gpio(node, "qcom,otg-id-gpio", 0);
+		if (gpio_is_valid(chg->otg_id_gpio)) {
+			devm_gpio_request_one(chg->dev, chg->otg_id_gpio, GPIOF_IN, "x00td_otg_id");
+		} else {
+			dev_err(chg->dev, "Invalid OTG ID GPIO\n");
+			chg->uusb_gpio_otg_quirk = false;
+		}
+	}
 
 	return 0;
 }
