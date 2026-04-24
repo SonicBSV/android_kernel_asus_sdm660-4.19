@@ -25,7 +25,6 @@
 
 &pm660_charger {
 	qcom,use-extcon;
-	qcom,uusb-host-extcon-external;
 	qcom,fcc-max-ua = <2000000>;
 	qcom,fv-max-uv = <4350000>;
 	qcom,usb-icl-ua = <2000000>;
@@ -34,7 +33,7 @@
 	qcom,wipower-max-uw = <0>;
 
 	/* OTG */
-	qcom,otg-cl-ua = <1500000>;
+	qcom,otg-cl-ua = <1000000>;
 	qcom,boost-threshold-ua = <100000>;
 	qcom,otg-deglitch-time-ms = <50>;
 

@@ -152,11 +152,6 @@ static const unsigned int smblib_extcon_cable[] = {
 	EXTCON_NONE,
 };
 
-static const unsigned int smblib_extcon_usb_only_cable[] = {
-	EXTCON_USB,
-	EXTCON_NONE,
-};
-
 /* EXTCON_USB and EXTCON_USB_HOST are mutually exclusive */
 static const u32 smblib_extcon_exclusive[] = {0x3, 0};
 
@@ -353,7 +348,9 @@ struct smb_charger {
 	u8			float_cfg;
 	bool			use_extcon;
 	bool			otg_present;
-	bool			uusb_host_extcon_external;
+	/* ASUS X00TD BSP */
+	bool			x00td_otg_active;
+	bool			x00td_charging_flow_active;
 	bool			is_audio_adapter;
 	bool			disable_stat_sw_override;
 	bool			in_chg_lock;

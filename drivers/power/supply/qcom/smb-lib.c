@@ -16,7 +16,6 @@
 #include "battery.h"
 #include "step-chg-jeita.h"
 #include "storm-watch.h"
-#include <linux/gpio.h>
 
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
@@ -1689,6 +1688,10 @@ static int _smblib_vbus_regulator_enable(struct regulator_dev *rdev)
 			smblib_err(chg, "Couldn't enable OTG rc=%d\n", rc);
 	}
 
+	/* ASUS BSP: mark OTG as active */
+	if (rc >= 0)
+		chg->x00td_otg_active = true;
+
 	return rc;
 }
 
@@ -1752,6 +1755,9 @@ static int _smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 		smblib_err(chg, "Couldn't set OTG_ENG_OTG_CFG_REG rc=%d\n", rc);
 		return rc;
 	}
+
+	/* ASUS BSP: mark OTG as inactive */
+	chg->x00td_otg_active = false;
 
 	return 0;
 }
@@ -3613,9 +3619,24 @@ irqreturn_t smblib_handle_usbin_uv(int irq, void *data)
 static void smblib_micro_usb_plugin(struct smb_charger *chg, bool vbus_rising)
 {
 	if (vbus_rising) {
+		/* use the typec flag even though its not typec */
 		chg->typec_present = true;
+
+		/*
+		 * ASUS BSP (from 4.4):
+		 * Protect against double-triggering of charging flow.
+		 * The 12-second delay allows APSD and D+/D- to stabilize
+		 * before the charger driver configures current limits.
+		 * Without this, X00TD exhibits charging "bouncing".
+		 */
+		if (!chg->x00td_charging_flow_active) {
+			chg->x00td_charging_flow_active = true;
+			smblib_dbg(chg, PR_MISC,
+				   "X00TD: charger plugged, starting flow\n");
+		}
 	} else {
 		chg->typec_present = false;
+		chg->x00td_charging_flow_active = false;
 		smblib_update_usb_type(chg);
 		extcon_set_state_sync(chg->extcon, EXTCON_USB, false);
 		smblib_uusb_removal(chg);
@@ -3688,28 +3709,49 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 	vbus_rising = (bool)(stat & USBIN_PLUGIN_RT_STS_BIT);
 
 	/*
-	 * X00TD BSP:
-	 * Ignore self-VBUS only while OTG boost is actually enabled.
-	 * Do not block charger path just because OTG ID GPIO is low.
+	 * ASUS BSP (from 4.4):
+	 * When OTG boost is active, VBUS rising is caused by our own 5V.
+	 * Ignore it so charger detection (APSD/DPDM/parallel) does not
+	 * interfere with USB host mode.
 	 */
-	if (chg->otg_en && vbus_rising)
+	if (chg->x00td_otg_active && vbus_rising) {
+		smblib_dbg(chg, PR_INTERRUPT,
+			   "X00TD: ignore self VBUS while OTG active\n");
 		return;
+	}
 
 	smblib_set_opt_freq_buck(chg, vbus_rising ? chg->chg_freq.freq_5V :
 						chg->chg_freq.freq_removal);
 
 	if (vbus_rising) {
+		if (smblib_get_prop_dfp_mode(chg) != POWER_SUPPLY_TYPEC_NONE) {
+			chg->fake_usb_insertion = true;
+			return;
+		}
+
 		rc = smblib_request_dpdm(chg, true);
 		if (rc < 0)
 			smblib_err(chg, "Couldn't to enable DPDM rc=%d\n", rc);
 
+		/* Remove FCC_STEPPER 1.5A init vote to allow FCC ramp up */
 		if (chg->fcc_stepper_enable)
 			vote(chg->fcc_votable, FCC_STEPPER_VOTER, false, 0);
 
+		/* Schedule work to enable parallel charger */
 		vote(chg->awake_votable, PL_DELAY_VOTER, true, 0);
 		schedule_delayed_work(&chg->pl_enable_work,
 					msecs_to_jiffies(PL_DELAY_MS));
+
+		/* vbus rising when APSD was disabled and PD_ACTIVE = 0 */
+		if (get_effective_result(chg->apsd_disable_votable) &&
+				!chg->pd_active)
+			pr_err("APSD disabled on vbus rising without PD\n");
 	} else {
+		if (chg->fake_usb_insertion) {
+			chg->fake_usb_insertion = false;
+			return;
+		}
+
 		if (chg->wa_flags & BOOST_BACK_WA) {
 			data = chg->irq_info[SWITCH_POWER_OK_IRQ].irq_data;
 			if (data) {
@@ -3723,9 +3765,10 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 			}
 		}
 
+		/* Force 1500mA FCC on removal if fcc stepper is enabled */
 		if (chg->fcc_stepper_enable)
 			vote(chg->fcc_votable, FCC_STEPPER_VOTER,
-						true, 1500000);
+							true, 1500000);
 
 		rc = smblib_request_dpdm(chg, false);
 		if (rc < 0)
@@ -4105,12 +4148,13 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 	u8 stat;
 
 	/*
-	 * X00TD BSP:
-	 * Ignore charger type detection only while OTG boost is actually on.
+	 * ASUS BSP (from 4.4):
+	 * While OTG boost is active, block APSD charger type detection.
+	 * Otherwise SMB2 toggles D+/D- and tears down USB host connection.
 	 */
-	if (chg->otg_en) {
+	if (chg->x00td_otg_active) {
 		smblib_dbg(chg, PR_INTERRUPT,
-			   "X00TD: ignore source change while OTG boost active\n");
+			   "X00TD: ignore source change while OTG active\n");
 		return IRQ_HANDLED;
 	}
 
@@ -4118,6 +4162,7 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 		return IRQ_HANDLED;
 
 	rc = smblib_read(chg, APSD_STATUS_REG, &stat);
+
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't read APSD_STATUS rc=%d\n", rc);
 		return IRQ_HANDLED;
@@ -4127,6 +4172,10 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 	if ((chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB)
 			&& (stat & APSD_DTC_STATUS_DONE_BIT)
 			&& !chg->uusb_apsd_rerun_done) {
+		/*
+		 * Force re-run APSD to handle slow insertion related
+		 * charger-mis-detection.
+		 */
 		chg->uusb_apsd_rerun_done = true;
 		smblib_rerun_apsd(chg);
 		return IRQ_HANDLED;
@@ -4666,14 +4715,6 @@ irqreturn_t smblib_handle_usb_typec_change(int irq, void *data)
 	struct smb_charger *chg = irq_data->parent_data;
 
 	if (chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB) {
-		/*
-		 * X00TD:
-		 * OTG host is provided by external extcon driver.
-		 * Do not run charger-side OTG worker.
-		 */
-		if (chg->uusb_host_extcon_external)
-			return IRQ_HANDLED;
-
 		cancel_delayed_work_sync(&chg->uusb_otg_work);
 		vote(chg->awake_votable, OTG_DELAY_VOTER, true, 0);
 		smblib_dbg(chg, PR_INTERRUPT, "Scheduling OTG work\n");
@@ -4882,6 +4923,10 @@ static void smblib_uusb_otg_work(struct work_struct *work)
 		extcon_set_state_sync(chg->extcon, EXTCON_USB, usb_present);
 		chg->otg_present = false;
 	}
+
+	smblib_dbg(chg, PR_REGISTER,
+		   "TYPE_C_STATUS_3=0x%02x usb=%d OTG=%d\n",
+		   stat, usb_present, otg);
 
 	power_supply_changed(chg->usb_psy);
 
