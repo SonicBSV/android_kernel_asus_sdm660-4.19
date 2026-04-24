@@ -1761,6 +1761,7 @@ static int _smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 int smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 {
 	struct smb_charger *chg = rdev_get_drvdata(rdev);
+	union power_supply_propval pval = { 0, };
 	int rc = 0;
 
 	mutex_lock(&chg->otg_oc_lock);
@@ -1774,22 +1775,34 @@ int smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 	if (chg->usb_icl_votable)
 		vote(chg->usb_icl_votable, USBIN_USBIN_BOOST_VOTER, false, 0);
 
-#ifdef CONFIG_MACH_ASUS_SDM660
 	/*
-	 * X00TD BSP fix:
-	 * If charger was plugged while OTG boost was active, USB_PLUGIN IRQ
-	 * was ignored by design. After OTG is disabled, charger path must be
-	 * re-evaluated explicitly, otherwise charging never starts until
-	 * cable is physically replugged.
+	 * X00TD:
+	 * While OTG was active we intentionally ignored USB_PLUGIN and
+	 * USB_SOURCE_CHANGE events caused by VBUS transitions. After OTG
+	 * is disabled, we must explicitly re-evaluate USB plugin state and
+	 * rerun APSD, otherwise charging path may never recover until cable
+	 * replug.
 	 */
-	if (rc >= 0) {
-		msleep(30);
+	if (rc >= 0 && chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB) {
+		msleep(50);
 
 		mutex_lock(&chg->lock);
+
+		/* Re-check plugin path */
 		smblib_usb_plugin_locked(chg);
+
+		/* If charger cable is already there, rerun APSD explicitly */
+		smblib_rerun_apsd_if_required(chg);
+
+		rc = smblib_get_prop_usb_present(chg, &pval);
+		if (rc >= 0)
+			extcon_set_state_sync(chg->extcon, EXTCON_USB,
+					      !!pval.intval);
+
+		power_supply_changed(chg->usb_psy);
+
 		mutex_unlock(&chg->lock);
 	}
-#endif
 
 unlock:
 	mutex_unlock(&chg->otg_oc_lock);
