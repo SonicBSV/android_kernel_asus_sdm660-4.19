@@ -40,8 +40,6 @@ static bool is_secure(struct smb_charger *chg, int addr)
 	return (bool)((addr & 0xFF) >= 0xA0);
 }
 
-void smblib_usb_plugin_locked(struct smb_charger *chg);
-
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val)
 {
 	unsigned int temp;
@@ -1773,24 +1771,6 @@ int smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 
 	if (chg->usb_icl_votable)
 		vote(chg->usb_icl_votable, USBIN_USBIN_BOOST_VOTER, false, 0);
-
-#ifdef CONFIG_MACH_ASUS_SDM660
-	/*
-	 * X00TD BSP fix:
-	 * If charger was plugged while OTG boost was active, USB_PLUGIN IRQ
-	 * was ignored by design. After OTG is disabled, charger path must be
-	 * re-evaluated explicitly, otherwise charging never starts until
-	 * cable is physically replugged.
-	 */
-	if (rc >= 0) {
-		msleep(30);
-
-		mutex_lock(&chg->lock);
-		smblib_usb_plugin_locked(chg);
-		mutex_unlock(&chg->lock);
-	}
-#endif
-
 unlock:
 	mutex_unlock(&chg->otg_oc_lock);
 	return rc;
