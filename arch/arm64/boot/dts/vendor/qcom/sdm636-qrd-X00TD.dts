@@ -101,10 +101,6 @@
 		goodix,reset_gpio = <&tlmm 20 GPIO_ACTIVE_LOW>;
 		goodix,gpio_vdd = <&pm660l_gpios 5 GPIO_ACTIVE_HIGH>;
 		goodix,irq_gpio = <&tlmm 72 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default", "sleep";
-		pinctrl-0 = <&goodix_reset_active &goodix_irq_active>;
-		pinctrl-1 = <&goodix_reset_sleep &goodix_irq_sleep>;
-		status = "okay";
 	};
 };
 
