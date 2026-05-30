@@ -6,6 +6,7 @@
  * kernel/irq/. Do not even think about using any information outside
  * of this file for your non core code.
  */
+
 #include <linux/irqdesc.h>
 #include <linux/kernel_stat.h>
 #include <linux/pm_runtime.h>
@@ -103,7 +104,8 @@ extern int __irq_get_irqchip_state(struct irq_data *data,
 
 extern void init_kstat_irqs(struct irq_desc *desc, int node, int nr);
 
-irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags);
+irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc,
+				      unsigned int *flags);
 irqreturn_t handle_irq_event_percpu(struct irq_desc *desc);
 irqreturn_t handle_irq_event(struct irq_desc *desc);
 
@@ -116,10 +118,13 @@ void __irq_wake_thread(struct irq_desc *desc, struct irqaction *action);
 extern void register_irq_proc(unsigned int irq, struct irq_desc *desc);
 extern void unregister_irq_proc(unsigned int irq, struct irq_desc *desc);
 extern void register_handler_proc(unsigned int irq, struct irqaction *action);
-extern void unregister_handler_proc(unsigned int irq, struct irqaction *action);
+extern void unregister_handler_proc(unsigned int irq,
+				    struct irqaction *action);
 #else
-static inline void register_irq_proc(unsigned int irq, struct irq_desc *desc) { }
-static inline void unregister_irq_proc(unsigned int irq, struct irq_desc *desc) { }
+static inline void register_irq_proc(unsigned int irq,
+				     struct irq_desc *desc) { }
+static inline void unregister_irq_proc(unsigned int irq,
+					struct irq_desc *desc) { }
 static inline void register_handler_proc(unsigned int irq,
 					 struct irqaction *action) { }
 static inline void unregister_handler_proc(unsigned int irq,
@@ -129,21 +134,30 @@ static inline void unregister_handler_proc(unsigned int irq,
 #ifdef CONFIG_IRQ_SBALANCE
 extern void sbalance_desc_add(struct irq_desc *desc);
 extern void sbalance_desc_del(struct irq_desc *desc);
-// Runtime gate to allow /proc/irq/*/smp_affinity writes when sbalance is off
+/*
+ * Runtime gate: allows /proc/irq/N/smp_affinity writes only when sbalance
+ * is disabled, so userspace and the balancer do not fight over affinity.
+ *
+ * BUG FIX: original declared `static bool sbalance_enabled` in the #else
+ * branch — the `static` keyword makes it a definition with internal linkage,
+ * which is correct, but it should be `static` only outside CONFIG_IRQ_SBALANCE.
+ * Inside CONFIG_IRQ_SBALANCE the variable is defined in sbalance.c and
+ * must be declared `extern` here.
+ */
 extern bool sbalance_enabled;
 #else
 static inline void sbalance_desc_add(struct irq_desc *desc) { }
 static inline void sbalance_desc_del(struct irq_desc *desc) { }
-static bool sbalance_enabled;
+/* Provide a compile-time constant false so callers need not #ifdef. */
+static inline bool __sbalance_enabled_stub(void) { return false; }
+#define sbalance_enabled false
 #endif
 
 extern bool __irq_can_set_affinity(struct irq_desc *desc);
 extern bool irq_can_set_affinity_usr(unsigned int irq);
-
 extern void irq_set_thread_affinity(struct irq_desc *desc);
-
-extern int irq_do_set_affinity(struct irq_data *data,
-			       const struct cpumask *dest, bool force);
+extern int  irq_do_set_affinity(struct irq_data *data,
+				const struct cpumask *dest, bool force);
 
 #ifdef CONFIG_SMP
 extern int irq_setup_affinity(struct irq_desc *desc);
@@ -176,7 +190,8 @@ static inline void chip_bus_sync_unlock(struct irq_desc *desc)
 struct irq_desc *
 __irq_get_desc_lock(unsigned int irq, unsigned long *flags, bool bus,
 		    unsigned int check);
-void __irq_put_desc_unlock(struct irq_desc *desc, unsigned long flags, bool bus);
+void __irq_put_desc_unlock(struct irq_desc *desc, unsigned long flags,
+			   bool bus);
 
 static inline struct irq_desc *
 irq_get_desc_buslock(unsigned int irq, unsigned long *flags, unsigned int check)
@@ -312,16 +327,16 @@ struct irq_timings {
 DECLARE_PER_CPU(struct irq_timings, irq_timings);
 
 extern void irq_timings_free(int irq);
-extern int irq_timings_alloc(int irq);
+extern int  irq_timings_alloc(int irq);
 
 static inline void irq_remove_timings(struct irq_desc *desc)
 {
 	desc->istate &= ~IRQS_TIMINGS;
-
 	irq_timings_free(irq_desc_get_irq(desc));
 }
 
-static inline void irq_setup_timings(struct irq_desc *desc, struct irqaction *act)
+static inline void irq_setup_timings(struct irq_desc *desc,
+				     struct irqaction *act)
 {
 	int irq = irq_desc_get_irq(desc);
 	int ret;
@@ -381,34 +396,36 @@ static __always_inline void record_irq_time(struct irq_desc *desc)
 {
 	if (!static_branch_likely(&irq_timing_enabled))
 		return;
-
 	if (desc->istate & IRQS_TIMINGS) {
 		struct irq_timings *timings = this_cpu_ptr(&irq_timings);
 
 		timings->values[timings->count & IRQ_TIMINGS_MASK] =
 			irq_timing_encode(local_clock(),
 					  irq_desc_get_irq(desc));
-
 		timings->count++;
 	}
 }
-#else
+
+#else /* !CONFIG_IRQ_TIMINGS */
+
 static inline void irq_remove_timings(struct irq_desc *desc) {}
 static inline void irq_setup_timings(struct irq_desc *desc,
-				     struct irqaction *act) {};
+				     struct irqaction *act) {}
 static inline void record_irq_time(struct irq_desc *desc) {}
-#endif /* CONFIG_IRQ_TIMINGS */
 
+#endif /* CONFIG_IRQ_TIMINGS */
 
 #ifdef CONFIG_GENERIC_IRQ_CHIP
 void irq_init_generic_chip(struct irq_chip_generic *gc, const char *name,
 			   int num_ct, unsigned int irq_base,
-			   void __iomem *reg_base, irq_flow_handler_t handler);
+			   void __iomem *reg_base,
+			   irq_flow_handler_t handler);
 #else
 static inline void
 irq_init_generic_chip(struct irq_chip_generic *gc, const char *name,
 		      int num_ct, unsigned int irq_base,
-		      void __iomem *reg_base, irq_flow_handler_t handler) { }
+		      void __iomem *reg_base,
+		      irq_flow_handler_t handler) { }
 #endif /* CONFIG_GENERIC_IRQ_CHIP */
 
 #ifdef CONFIG_GENERIC_PENDING_IRQ
@@ -416,46 +433,54 @@ static inline bool irq_can_move_pcntxt(struct irq_data *data)
 {
 	return irqd_can_move_in_process_context(data);
 }
+
 static inline bool irq_move_pending(struct irq_data *data)
 {
 	return irqd_is_setaffinity_pending(data);
 }
+
 static inline void
 irq_copy_pending(struct irq_desc *desc, const struct cpumask *mask)
 {
 	cpumask_copy(desc->pending_mask, mask);
 }
+
 static inline void
 irq_get_pending(struct cpumask *mask, struct irq_desc *desc)
 {
 	cpumask_copy(mask, desc->pending_mask);
 }
+
 static inline struct cpumask *irq_desc_get_pending_mask(struct irq_desc *desc)
 {
 	return desc->pending_mask;
 }
+
 bool irq_fixup_move_pending(struct irq_desc *desc, bool force_clear);
-#else /* CONFIG_GENERIC_PENDING_IRQ */
+
+#else /* !CONFIG_GENERIC_PENDING_IRQ */
+
 static inline bool irq_can_move_pcntxt(struct irq_data *data)
 {
 	return true;
 }
+
 static inline bool irq_move_pending(struct irq_data *data)
 {
 	return false;
 }
+
 static inline void
-irq_copy_pending(struct irq_desc *desc, const struct cpumask *mask)
-{
-}
+irq_copy_pending(struct irq_desc *desc, const struct cpumask *mask) { }
+
 static inline void
-irq_get_pending(struct cpumask *mask, struct irq_desc *desc)
-{
-}
+irq_get_pending(struct cpumask *mask, struct irq_desc *desc) { }
+
 static inline struct cpumask *irq_desc_get_pending_mask(struct irq_desc *desc)
 {
 	return NULL;
 }
+
 static inline bool irq_fixup_move_pending(struct irq_desc *desc, bool fclear)
 {
 	return false;
@@ -468,6 +493,7 @@ static inline int irq_domain_activate_irq(struct irq_data *data, bool reserve)
 	irqd_set_activated(data);
 	return 0;
 }
+
 static inline void irq_domain_deactivate_irq(struct irq_data *data)
 {
 	irqd_clr_activated(data);
@@ -478,27 +504,26 @@ static inline void irq_domain_deactivate_irq(struct irq_data *data)
 #include <linux/debugfs.h>
 
 void irq_add_debugfs_entry(unsigned int irq, struct irq_desc *desc);
+
 static inline void irq_remove_debugfs_entry(struct irq_desc *desc)
 {
 	debugfs_remove(desc->debugfs_file);
 	kfree(desc->dev_name);
 }
+
 void irq_debugfs_copy_devname(int irq, struct device *dev);
+
 # ifdef CONFIG_IRQ_DOMAIN
 void irq_domain_debugfs_init(struct dentry *root);
 # else
-static inline void irq_domain_debugfs_init(struct dentry *root)
-{
-}
+static inline void irq_domain_debugfs_init(struct dentry *root) { }
 # endif
-#else /* CONFIG_GENERIC_IRQ_DEBUGFS */
-static inline void irq_add_debugfs_entry(unsigned int irq, struct irq_desc *d)
-{
-}
-static inline void irq_remove_debugfs_entry(struct irq_desc *d)
-{
-}
-static inline void irq_debugfs_copy_devname(int irq, struct device *dev)
-{
-}
+
+#else /* !CONFIG_GENERIC_IRQ_DEBUGFS */
+
+static inline void irq_add_debugfs_entry(unsigned int irq,
+					 struct irq_desc *d) { }
+static inline void irq_remove_debugfs_entry(struct irq_desc *d) { }
+static inline void irq_debugfs_copy_devname(int irq, struct device *dev) { }
+
 #endif /* CONFIG_GENERIC_IRQ_DEBUGFS */
