@@ -207,32 +207,28 @@ static void ff_ctl_device_event(struct work_struct *ws)
 {
     ff_ctl_context_t *ctx = container_of(ws, ff_ctl_context_t, work_queue);
     char *uevent_env[2] = {"FF_INTERRUPT", NULL};
+    FF_LOGV("'%s' enter.", __func__);
 
-    /* OPTIMIZATION: Продлеваем wakelock */
-    __pm_wakeup_event(ctx->wake_lock, 3000); /* 3 секунды */
-    
+    FF_LOGD("%s(irq = %d, ..) toggled.", __func__, ctx->irq_num);
+    __pm_wakeup_event(g_context->wake_lock, 2 * HZ); // 2 seconds.
     kobject_uevent_env(&ctx->miscdev.this_device->kobj, KOBJ_CHANGE, uevent_env);
+
+    FF_LOGV("'%s' leave.", __func__);
 }
 
 static irqreturn_t ff_ctl_device_irq(int irq, void *dev_id)
 {
     ff_ctl_context_t *ctx = (ff_ctl_context_t *)dev_id;
-
-    /* OPTIMIZATION: Мгновенный wakelock на 2 секунды */
-    if (ctx->wake_lock) {
-        __pm_wakeup_event(ctx->wake_lock, 2000);
-    }
-
-    /* OPTIMIZATION: Не отключаем IRQ - это добавляет задержку */
+    disable_irq_nosync(irq);
     if (likely(irq == ctx->irq_num)) {
-        if (g_config && g_config->enable_fasync && ctx->async_queue) {
-            kill_fasync(&ctx->async_queue, SIGIO, POLL_IN);
+        if (g_config && g_config->enable_fasync && g_context->async_queue) {
+            kill_fasync(&g_context->async_queue, SIGIO, POLL_IN);
         } else {
-            /* OPTIMIZATION: Используем schedule_work напрямую без disable/enable */
             schedule_work(&ctx->work_queue);
         }
     }
 
+    enable_irq(irq);
     return IRQ_HANDLED;
 }
 
