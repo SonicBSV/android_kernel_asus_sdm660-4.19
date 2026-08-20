@@ -27,7 +27,6 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
-#include <linux/ksu.h>
 #include "input-compat.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -382,18 +381,7 @@ static int input_get_disposition(struct input_dev *dev,
 static void input_handle_event(struct input_dev *dev,
 			       unsigned int type, unsigned int code, int value)
 {
-	int disposition;
-
-	/*
-	 * KernelSU: хук input_handle_event.
-	 * Перехватываем события ввода для определения нажатия
-	 * аппаратной кнопки громкости при загрузке — это используется
-	 * для активации безопасного режима KernelSU (Safe Mode).
-	 * Вызывается до обработки события.
-	 */
-	ksu_handle_input_handle_event(&type, &code, &value);
-
-	disposition = input_get_disposition(dev, type, code, &value);
+	int disposition = input_get_disposition(dev, type, code, &value);
 
 	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
 		add_input_randomness(type, code, value);
@@ -436,6 +424,7 @@ static void input_handle_event(struct input_dev *dev,
 		input_pass_values(dev, dev->vals, dev->num_vals);
 		dev->num_vals = 0;
 	}
+
 }
 
 /**
@@ -1502,7 +1491,7 @@ static ssize_t input_dev_show_id_##name(struct device *dev,		\
 					char *buf)			\
 {									\
 	struct input_dev *input_dev = to_input_dev(dev);		\
-	return scnprintf(buf, PAGE_SIZE, "%04x\n", input_dev->id.name);\
+	return scnprintf(buf, PAGE_SIZE, "%04x\n", input_dev->id.name);	\
 }									\
 static DEVICE_ATTR(name, S_IRUGO, input_dev_show_id_##name, NULL)
 
@@ -1746,7 +1735,7 @@ static int input_dev_uevent(struct device *device, struct kobj_uevent_env *env)
 			if (!active && !on)				\
 				continue;				\
 									\
-			dev->event(dev, EV_##type, i, on ? active : 0);\
+			dev->event(dev, EV_##type, i, on ? active : 0);	\
 		}							\
 	} while (0)
 
