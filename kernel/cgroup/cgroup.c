@@ -57,6 +57,7 @@
 #include <linux/sched/cputime.h>
 #include <linux/psi.h>
 #include <linux/cpu.h>
+#include <linux/xattr.h>
 #include <net/sock.h>
 
 #define CREATE_TRACE_POINTS
@@ -3916,20 +3917,40 @@ static void cgroup_file_notify_timer(struct timer_list *timer)
 					notify_timer));
 }
 
+/* Определение структуры kernfs_iattrs для доступа к UID/GID родительской cgroup */
+struct kernfs_iattrs {
+	kuid_t			ia_uid;
+	kgid_t			ia_gid;
+	struct timespec64	ia_atime;
+	struct timespec64	ia_mtime;
+	struct timespec64	ia_ctime;
+	struct simple_xattrs	xattrs;
+};
+
 static int cgroup_add_file(struct cgroup_subsys_state *css, struct cgroup *cgrp,
 			   struct cftype *cft)
 {
 	char name[CGROUP_FILE_NAME_MAX];
 	struct kernfs_node *kn;
 	struct lock_class_key *key = NULL;
+	kuid_t uid = GLOBAL_ROOT_UID;
+	kgid_t gid = GLOBAL_ROOT_GID;
 	int ret;
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 	key = &cft->lockdep_key;
 #endif
+
+	/* ФИКС ДЛЯ ANDROID 13: 
+	   Файлы внутри cgroup должны наследовать владельца от родительской папки (system:system) */
+	if (cgrp->kn && cgrp->kn->iattr) {
+		uid = cgrp->kn->iattr->ia_uid;
+		gid = cgrp->kn->iattr->ia_gid;
+	}
+
 	kn = __kernfs_create_file(cgrp->kn, cgroup_file_name(cgrp, cft, name),
 				  cgroup_file_mode(cft),
-				  GLOBAL_ROOT_UID, GLOBAL_ROOT_GID,
+				  uid, gid,
 				  0, cft->kf_ops, cft,
 				  NULL, key);
 	if (IS_ERR(kn))
