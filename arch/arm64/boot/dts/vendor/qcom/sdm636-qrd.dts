@@ -39,9 +39,7 @@
 			<0x0001001b 0x0102001a 0x0 0x0>;
 };
 
-СБОРКА_ДОЛЖНА_СЛОМАТЬСЯ_ТУТ
-
-mdss_mdp {
+&mdss_mdp {
 	qcom,mdss-pref-prim-intf = "dsi";
 };
 
