@@ -459,70 +459,79 @@
 		#address-cells = <2>;
 		#size-cells = <0>;
 
-		pm660_haptics: qcom,haptic@c000 {
+		pm660_haptics: qcom,haptics@c000 {
 			compatible = "qcom,pm660-haptics";
 			reg = <0xc000 0x100>;
+			reg-names = "haptics";
+			status = "okay";
+
 			interrupts = <0x1 0xc0 0x0 IRQ_TYPE_EDGE_BOTH>,
 				     <0x1 0xc0 0x1 IRQ_TYPE_EDGE_BOTH>;
 			interrupt-names = "hap-sc-irq", "hap-play-irq";
-			qcom,actuator-type = "lra";
-			qcom,vmax-mv = <3200>;
-			qcom,play-rate-us = <6667>;
-			qcom,lra-resonance-sig-shape = "sine";
-			qcom,lra-auto-resonance-mode = "qwd";
-			qcom,lra-allow-variable-play-rate;
 
+			qcom,actuator-type = "erm"; 
+			qcom,vmax-mv = <3000>;
+			qcom,play-rate-us = <5715>;
+			qcom,max-play-time-ms = <15000>;
+
+			/* 0: CLICK */
 			wf_0 {
-				/* CLICK */
 				qcom,effect-id = <0>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [3e 3e 3e];
-				qcom,wf-play-rate-us = <6667>;
-				qcom,wf-brake-pattern = [01 00 00 00];
-				qcom,lra-auto-resonance-disable;
-			};
-			wf_1 {
-				/* DOUBLE CLICK */
-				qcom,effect-id = <1>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [7e 7e 02 02 02 02 02 02];
-				qcom,wf-play-rate-us = <7143>;
-				qcom,wf-repeat-count = <2>;
+				qcom,wf-vmax-mv = <3000>;
+				qcom,wf-pattern = /bits/ 8 <0x3e 0x3e 0x3e>;
+				qcom,wf-play-rate-us = <5715>;
+				qcom,wf-repeat-count = <1>;
 				qcom,wf-s-repeat-count = <1>;
-				qcom,lra-auto-resonance-disable;
 			};
+
+			/* 1: DOUBLE CLICK */
+			wf_1 {
+				qcom,effect-id = <1>;
+				qcom,wf-vmax-mv = <3000>;
+				qcom,wf-pattern = /bits/ 8 <0x7e 0x7e 0x00 0x00 0x7e 0x7e>;
+				qcom,wf-play-rate-us = <5715>;
+				qcom,wf-repeat-count = <1>;
+				qcom,wf-s-repeat-count = <1>;
+			};
+
+			/* 2: TICK (Мягкий клик клавиатуры/скролла) */
 			wf_2 {
-				/* TICK */
 				qcom,effect-id = <2>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [7e 7e];
+				qcom,wf-vmax-mv = <2200>;
+				qcom,wf-pattern = /bits/ 8 <0x40 0x00>;
 				qcom,wf-play-rate-us = <4000>;
-				qcom,lra-auto-resonance-disable;
+				qcom,wf-repeat-count = <1>;
+				qcom,wf-s-repeat-count = <1>;
 			};
+
+			/* 3: THUD */
 			wf_3 {
-				/* THUD */
 				qcom,effect-id = <3>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [7e 7e 7e];
-				qcom,wf-play-rate-us = <6667>;
-				qcom,lra-auto-resonance-disable;
+				qcom,wf-vmax-mv = <3000>;
+				qcom,wf-pattern = /bits/ 8 <0x7e 0x7e 0x7e>;
+				qcom,wf-play-rate-us = <5715>;
+				qcom,wf-repeat-count = <1>;
+				qcom,wf-s-repeat-count = <1>;
 			};
+
+			/* 4: POP */
 			wf_4 {
-				/* POP */
 				qcom,effect-id = <4>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [7e 7e];
+				qcom,wf-vmax-mv = <2600>;
+				qcom,wf-pattern = /bits/ 8 <0x60 0x00>;
 				qcom,wf-play-rate-us = <5000>;
-				qcom,lra-auto-resonance-disable;
+				qcom,wf-repeat-count = <1>;
+				qcom,wf-s-repeat-count = <1>;
 			};
+
+			/* 5: HEAVY CLICK (Сильный щелчок) */
 			wf_5 {
-				/* HEAVY CLICK */
 				qcom,effect-id = <5>;
-				qcom,wf-vmax-mv = <3600>;
-				qcom,wf-pattern = [7e 7e 7e];
-				qcom,wf-play-rate-us = <6667>;
-				qcom,wf-brake-pattern = [03 00 00 00];
-				qcom,lra-auto-resonance-disable;
+				qcom,wf-vmax-mv = <3200>;
+				qcom,wf-pattern = /bits/ 8 <0x7e 0x7e 0x7e 0x7e>;
+				qcom,wf-play-rate-us = <5715>;
+				qcom,wf-repeat-count = <1>;
+				qcom,wf-s-repeat-count = <1>;
 			};
 		};
 	};

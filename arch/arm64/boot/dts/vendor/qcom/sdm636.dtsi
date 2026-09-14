@@ -57,6 +57,11 @@
 		};
 	};
 
+	gpio_keys {
+		/delete-node/ camera_focus;
+		/delete-node/ camera_snapshot;
+	};
+
 	/delete-node/ arm,smmu-turing_q6@5180000;
 	qcom,msm_fastrpc {
 		/delete-node/ qcom,msm_fastrpc_compute_cb5;

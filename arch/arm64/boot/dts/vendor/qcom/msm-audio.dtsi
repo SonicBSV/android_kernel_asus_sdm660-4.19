@@ -141,8 +141,10 @@
 		dai_mi2s2: qcom,msm-dai-q6-mi2s-tert {
 			compatible = "qcom,msm-dai-q6-mi2s";
 			qcom,msm-dai-q6-mi2s-dev-id = <2>;
-			qcom,msm-mi2s-rx-lines = <0>;
-			qcom,msm-mi2s-tx-lines = <3>;
+			/* Huaqin add for config nxp pa i2s by xudayi at 2018/03/03 start */
+			qcom,msm-mi2s-rx-lines = <1>;
+			qcom,msm-mi2s-tx-lines = <2>;
+			/* Huaqin add for config nxp pa i2s by xudayi at 2018/03/03 end */
 		};
 
 		dai_mi2s4: qcom,msm-dai-q6-mi2s-quin {

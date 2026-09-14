@@ -10,13 +10,10 @@
 #include <linux/slab.h>
 #include <linux/iopoll.h>
 #include <linux/kthread.h>
+#include <linux/errno.h>
 #include <linux/sched.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/msm-bus.h>
-
-#ifdef CONFIG_MACH_ASUS_SDM660
-#include <linux/errno.h>
-#endif
 
 #include "mdss.h"
 #include "mdss_dsi.h"
@@ -1198,11 +1195,10 @@ static int mdss_dsi_read_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	int i, rc, *lenp;
 	int start = 0;
 	struct dcs_cmd_req cmdreq;
-#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
 	int times = 0;
-
 	*ctrl->status_buf.data = 0;
-#endif
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
 	rc = 1;
 	lenp = ctrl->status_valid_params ?: ctrl->status_cmds_rlen;
 
@@ -1212,11 +1208,9 @@ static int mdss_dsi_read_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	}
 
 	for (i = 0; i < ctrl->status_cmds.cmd_cnt; ++i) {
-#ifdef CONFIG_MACH_ASUS_SDM660
-		while (times < 2 && ((*ctrl->status_buf.data) != 0x0c) &&
-			((*ctrl->status_buf.data) != 0x9c) &&
-			((*ctrl->status_buf.data) != 0x98)) {
-#endif
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
+		while(times < 2 && ((*ctrl->status_buf.data) != 0x0c)&& ((*ctrl->status_buf.data) != 0x9c)&& ((*ctrl->status_buf.data) != 0x98)){
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
 		memset(&cmdreq, 0, sizeof(cmdreq));
 		cmdreq.cmds = ctrl->status_cmds.cmds + i;
 		cmdreq.cmds_cnt = 1;
@@ -1231,14 +1225,14 @@ static int mdss_dsi_read_status(struct mdss_dsi_ctrl_pdata *ctrl)
 			cmdreq.flags |= CMD_REQ_HS_MODE;
 
 		rc = mdss_dsi_cmdlist_put(ctrl, &cmdreq);
-#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
 		times++;
 		}
-#endif
+/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
 		if (rc <= 0) {
 			if (!mdss_dsi_sync_wait_enable(ctrl) ||
 				mdss_dsi_sync_wait_trigger(ctrl))
-				pr_err("%s: get status: fail\n", __func__);
+			pr_err("%s: get status: fail\n", __func__);
 			return rc;
 		}
 
@@ -1311,9 +1305,9 @@ int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		else if (sctrl_pdata)
 			ret = ctrl_pdata->check_read_status(sctrl_pdata);
 	} else {
-#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot start*/
 		ret = -ENOTSUPP;
-#endif
+/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot end*/
 		pr_err("%s: Read status register returned error\n", __func__);
 	}
 

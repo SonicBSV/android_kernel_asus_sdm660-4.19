@@ -359,6 +359,7 @@
 		cell-index = <3>;
 		compatible = "qcom,camera";
 		reg = <0x03>;
+		status = "disabled";
 		qcom,csiphy-sd-index = <1>;
 		qcom,csid-sd-index = <1>;
 		qcom,mount-angle = <90>;
@@ -416,4 +417,9 @@
 		qcom,master-en = <1>;           /* Enable GPIO */
 		status = "ok";
 	};
+};
+
+&cci {
+    /delete-node/ qcom,eeprom@3;
+    /delete-node/ qcom,camera@3;
 };

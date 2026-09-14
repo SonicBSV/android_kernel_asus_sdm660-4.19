@@ -153,14 +153,19 @@
 / {
 	qrd_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;
-
-		#include "fg-gen3-batterydata-qrd-skuk-4v4-3000mah.dtsi"
+/* Huaqin modify for ZQL1650  by fangaijun at 2018/02/1 start */
+		/* Huaqin modify for ZQL1820-284 Load battery profile file by gaochao at 2018/08/21 start */
+		//#include "fg-gen3-batterydata-3292665_Huaqin_QL1650cos_5000mAh.dtsi"
+		/* Huaqin modify for ZQL1820-284 Load battery profile file by gaochao at 2018/08/21 end */
+/* Huaqin modify for ZQL1650  by fangaijun at 2018/02/1 end */
 	};
 };
 
 &pm660_fg {
 	qcom,battery-data = <&qrd_batterydata>;
-	qcom,fg-jeita-thresholds = <0 5 55 55>;
+/* Huaqin modify for ZQL1650 Realize HW Jeita by fangaijun  at 2018/02/6 start */
+	//qcom,fg-jeita-thresholds = <0 5 55 55>;
+/* Huaqin modify for ZQL1650 Realize HW Jeita by fangaijun  at 2018/02/6 end */
 	qcom,battery-thermal-coefficients = [9d 50 ff];
 };
 
@@ -196,6 +201,9 @@
 	vdd-supply = <&pm660l_l4>;
 	qcom,vdd-voltage-level = <2950000 2950000>;
 	qcom,vdd-current-level = <200 570000>;
+	// Huaqin add for emmc vdd always on by chenhuazhen at 2018/04/24  start
+	qcom,vdd-always-on;
+	// Huaqin add for emmc vdd always on by chenhuazhen at 2018/04/24  end
 
 	/* device communication power supply */
 	vdd-io-supply = <&pm660_l8>;
@@ -257,28 +265,16 @@
 	status = "ok";
 };
 
-&pm660l_gpios {
-	/* GPIO 7 for VOL_UP */
-	key_vol_up {
-		key_vol_up_default: key_vol_up_default {
-			pins = "gpio7";
-			function = "normal";
-			input-enable;
-			bias-pull-up;
-		};
-	};
-};
-
 &pm660_gpios {
 	/* GPIO 11 for home key */
-	key_home {
+	/*key_home {
 		key_home_default: key_home_default {
 			pins = "gpio11";
 			function = "normal";
 			input-enable;
 			bias-pull-up;
 		};
-	};
+	};*/
 
 	/* GPIO 4 (NFC_CLK_REQ) */
 	nfc_clk {
@@ -366,20 +362,48 @@
 
 		vol_up {
 			label = "volume_up";
-			gpios = <&pm660l_gpios 7 GPIO_ACTIVE_LOW>;
+			gpios = <&tlmm 44 0x1>;
 			linux,input-type = <1>;
 			linux,code = <KEY_VOLUMEUP>;
 			gpio-key,wakeup;
 			debounce-interval = <15>;
 		};
+		vol_down {
+			label = "volume_down";
+			gpios = <&tlmm 43 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+
+	};
+
+	hbtp {
+		compatible = "qcom,hbtp-input";
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_rst_active>;
+		pinctrl-1 = <&ts_rst_suspend>;
+		vcc_ana-supply = <&pm660l_l3>;
+		vcc_dig-supply = <&pm660_l13>;
+		qcom,afe-load = <20000>;
+		qcom,afe-vtg-min = <3008000>;
+		qcom,afe-vtg-max = <3008000>;
+		qcom,dig-load = <40000>;
+		qcom,dig-vtg-min = <1808000>;
+		qcom,dig-vtg-max = <1808000>;
+		qcom,fb-resume-delay-us = <10000>;
+		qcom,afe-power-on-delay-us = <1000>;
+		qcom,afe-power-off-delay-us = <6>;
 	};
 };
 
+/* Huaqin modify for ZQL1650-486 by liunianliang at 2018/03/19 start */
 &qusb_phy0 {
 	qcom,qusb-phy-init-seq = <0xf8 0x80
 				0x83 0x84
-				0x83 0x88
-				0xc3 0x8c
+				0x81 0x88
+				0xc7 0x8c
 				0x30 0x08
 				0x79 0x0c
 				0x21 0x10
@@ -387,3 +411,4 @@
 				0x9f 0x1c
 				0x00 0x18>;
 };
+/* Huaqin modify for ZQL1650-486 by liunianliang at 2018/03/19 end */

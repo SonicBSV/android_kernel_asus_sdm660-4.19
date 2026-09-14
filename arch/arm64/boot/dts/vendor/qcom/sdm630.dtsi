@@ -708,8 +708,10 @@
 		reg-names = "wdt-base";
 		interrupts = <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>,
 				<GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
-		qcom,bark-time = <11000>;
-		qcom,pet-time = <10000>;
+                /* Huaqin modify for ZQL1650-950 by xieguoqiang at 2018/4/8 start*/
+		qcom,bark-time = <25000>;
+		qcom,pet-time = <15000>;
+                /* Huaqin modify for ZQL1650-950 by xieguoqiang at 2018/4/8 end*/
 		qcom,ipi-ping;
 		qcom,wakeup-enable;
 	};

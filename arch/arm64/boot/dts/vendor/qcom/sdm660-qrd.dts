@@ -2,6 +2,23 @@
 
 #include "sdm660.dtsi"
 #include "sdm660-qrd.dtsi"
+#include "sdm660-pinctrl.dtsi"
+#include "dsi-panel-nt36672-1080p-video-txd.dtsi"
+#include "dsi-panel-nt36672-1080p-video.dtsi"
+/* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 start */
+#include "dsi-panel-nt36672ah-1080p-video-kd.dtsi"
+/* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 end */
+/* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 start */
+#include "dsi-panel-hx83112a-1080p-video-tm.dtsi"
+/* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 end */
+
+/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 start */
+#ifdef CONFIG_1650P_TD4310_TXD
+#include "dsi-panel-td4310-1080p-video-txd.dtsi"
+#endif
+/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 end */
+
+#include "sdm660-internal-codec.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. SDM 660 PM660 + PM660L QRD";
@@ -16,12 +33,17 @@
 	qcom,mdss-pref-prim-intf = "dsi";
 };
 
-&mdss_fb0 {
-	qcom,mdss-mixer-swap;
+&mdss_dp_ctrl {
+	pinctrl-names = "mdss_dp_active", "mdss_dp_sleep";
+	pinctrl-0 = <&mdss_dp_aux_active &mdss_dp_usbplug_cc_active>;
+	pinctrl-1 = <&mdss_dp_aux_suspend &mdss_dp_usbplug_cc_suspend>;
+	qcom,aux-en-gpio = <&tlmm 55 0>;
+	qcom,aux-sel-gpio = <&tlmm 56 0>;
+	qcom,usbplug-cc-gpio = <&tlmm 58 0>;
 };
 
 &mdss_dsi {
-	hw-config = "split_dsi";
+	hw-config = "single_dsi";
 };
 
 &mdss_dsi0 {
@@ -31,9 +53,11 @@
 	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
 	qcom,platform-reset-gpio = <&tlmm 53 0>;
 	qcom,platform-te-gpio = <&tlmm 59 0>;
+	qcom,platform-tp-reset-gpio = <&tlmm 66 0>;
 };
 
 &mdss_dsi1 {
+	status = "disabled";
 	qcom,dsi-pref-prim-pan = <&dsi_dual_nt36850_truly_cmd>;
 	pinctrl-names = "mdss_default", "mdss_sleep";
 	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
@@ -44,13 +68,39 @@
 
 &dsi_dual_nt36850_truly_cmd {
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
-	qcom,mdss-dsi-bl-min-level = <1>;
+	qcom,mdss-dsi-bl-min-level = <8>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-force-clock-lane-hs;
+	/delete-property/ qcom,esd-check-enabled;
 };
 
+/* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 start */
+&dsi_nt36672ah_1080p_video_kd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-max-level = <4095>;
+	qcom,mdss-dsi-force-clock-lane-hs;
+	/delete-property/ qcom,esd-check-enabled;
+};
+/* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 end */
+
+/* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 start */
+&dsi_hx83112a_1080p_video_tm {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-max-level = <4095>;
+	qcom,mdss-dsi-force-clock-lane-hs;
+	/delete-property/ qcom,esd-check-enabled;
+};
+/* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 end */
+
+/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 start */
+
 &pm660l_wled {
-	qcom,string-cfg= <6>;
+	qcom,led-strings-list = [00 01];       /* ИСПРАВЛЕНО: Байтовый формат [] */
+	qcom,enabled-strings = [00 01];        /* ИСПРАВЛЕНО: Байтовый формат [] */
+	qcom,default-led-sink-config = <0x3>;  /* u32 здесь оставляем в <> */
 	status = "ok";
 };
 
@@ -72,11 +122,58 @@
 		qcom,dig-load = <40000>;
 		qcom,dig-vtg-min = <1808000>;
 		qcom,dig-vtg-max = <1808000>;
-		qcom,fb-resume-delay-us = <10000>;
+		
+		qcom,fb-resume-delay-us = <15000>;
+		
 		qcom,afe-force-power-on;
 		qcom,afe-power-on-delay-us = <1000>;
 		qcom,afe-power-off-delay-us = <6>;
 	};
+
+/* Huaqin add for ZQL1820-42 by puqirui at 2018/11/01 start */
+	cdfinger_fp {
+		compatible = "cdfinger,fingerprint";
+		interrupt-parent = <&tlmm>;
+		interrupts = <72 0x0>;
+
+		cdfinger,reset_gpio = <&tlmm 20 0>;
+		cdfinger,irq_gpio = <&tlmm 72 0>;
+		cdfinger,gpio_vdd = <&pm660l_gpios 5 0>;
+		pinctrl-names = "cdfinger_active","cdfinger_sleep";
+		pinctrl-0 = <&cdfinger_reset_active &cdfinger_irq_active>;
+		pinctrl-1 = <&cdfinger_reset_sleep &cdfinger_irq_sleep>;
+	};
+
+	focaltech_fingerprint {
+		compatible = "focaltech,fingerprint";
+		interrupt-parent = <&tlmm>;
+		interrupts = <72 0x0>;
+
+		fp,reset_gpio   = <&tlmm 20 0>;
+		fp,irq_gpio        = <&tlmm 72 0>;
+		fp,vdd_gpio        = <&pm660l_gpios 5 0>;
+		pinctrl-names = "focalfp_active","focalfp_sleep";
+		pinctrl-0 = <&focalfp_reset_active &focalfp_irq_active>;
+		pinctrl-1 = <&focalfp_reset_sleep &focalfp_irq_sleep>;
+	};
+/* Huaqin add for ZQL1820-42 by puqirui at 2018/11/01 end */
+
+	/* Huaqin add for ZQL1820-136 by zhaojunhai1 at 2018/08/22 start */
+	/* Huaqin add for ZQL1820-145 by zhaojunhai1 at 2018/08/19 start */
+	confing_dist {
+		compatible = "config,dist";
+		dist,mem_gpio = <&tlmm 63 0>;
+		dist,mem1_gpio = <&tlmm 64 0>;
+		dist,nfc_gpio = <&pm660_gpios 11 0>;
+		dist,cam_gpio = <&tlmm 21 0>;
+
+		pinctrl-names = "dist_mem_active","dist_cam_active","dist_mem1_active";
+		pinctrl-0 = <&dist_mem_active>;
+		pinctrl-1 = <&dist_cam_active>;
+		pinctrl-2 = <&dist_mem1_active>;
+	};
+	/* Huaqin add for ZQL1820-145 by zhaojunhai1 at 2018/08/19 end */
+	/* Huaqin add for ZQL1820-136 by zhaojunhai1 at 2018/08/22 end */
 };
 
 &slim_aud {
@@ -87,3 +184,48 @@
 	/delete-node/sound-tavil;
 };
 
+/* Huaqin add for sar sensor by zhuqiang at 2018/08/03 start */
+&i2c_2 {
+	status = "okay";
+	semtech@28 {
+		compatible = "Semtech,sx9310";
+		reg = <0x28>;
+		vdd-supply  = <&pm660l_l3>;
+		vdd1-supply = <&pm660_l13>;  // for svdd
+		interrupt-parent = <&tlmm>;
+		Semtech,gpio-irq = <&tlmm 77 0x2008>; // gpio 77
+		interrupts = <77 0x2>;
+		pinctrl-names = "sarsensor_active", "sarsensor_suspend";
+		pinctrl-0 = <&sarsensor_int_active>;
+		pinctrl-1 = <&sarsensor_int_suspend>;
+	};
+};
+/* Huaqin add for sar sensor by zhuqiang at 2018/08/03 end */
+
+/* Huaqin add for als/ps by zhuqiang at 2018/08/03 start */
+&i2c_7 {
+	status = "okay";
+	stk@47 {
+		compatible = "stk,stk3x3x";
+		reg = <0x47>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <45 0x2>;
+		vdd-supply = <&pm660l_l3>;
+		vio-supply = <&pm660_l14>;
+		stk,irq-gpio = <&tlmm 45 0x02>;
+		pinctrl-names = "psensor_active", "psensor_suspend";
+		pinctrl-0 = <&psensor_int_active>;
+		pinctrl-1 = <&psensor_int_suspend>;
+		stk,state-reg = <0x0>;
+		stk,psctrl-reg = <0xB1>;
+		stk,alsctrl-reg = <0x72>;
+		stk,ledctrl-reg = <0x60>;
+		/* Huaqin modify for Power consumption by zhuqiang at 2018/09/20 start */
+		stk,wait-reg = <0x1F>;
+		/* Huaqin modify for Power consumption by zhuqiang at 2018/09/20 end */
+		stk,ps-thdh = <1700>;
+		stk,ps-thdl = <1500>;
+		stk,transmittance = <1100>;
+	};
+};
+/* Huaqin add for als/ps by zhuqiang at 2018/08/03 end */

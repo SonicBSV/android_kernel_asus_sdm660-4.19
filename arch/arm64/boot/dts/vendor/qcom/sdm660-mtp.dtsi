@@ -230,7 +230,9 @@
 			1 &intc 0 0 221 IRQ_TYPE_LEVEL_HIGH
 			2 &tlmm 54 IRQ_TYPE_LEVEL_HIGH>;
 	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
-	cd-gpios = <&tlmm 54 0x1>;
+/* Huaqin modify for ZQL1650-163 by lanshiming at 2018/1/17 start*/
+	cd-gpios = <&tlmm 54 0x0>;
+/* Huaqin modify for ZQL1650-163 by lanshiming at 2018/1/17 end*/
 
 	status = "ok";
 };

@@ -123,29 +123,30 @@
 					output-low;
 				};
 			};
-
+/* Huaqin modify for ZQL1820-740 by qiaoxiaokun at 2018/9/28 start */
 			hph_en1_wcd_active: hph_en1_wcd_active {
 				mux {
-					pins = "gpio5";
+					pins = "gpio998";
 				};
 
 				config {
-					pins = "gpio5";
+					pins = "gpio998";
 					output-high;
 				};
 			};
 
 			hph_en1_wcd_sleep: hph_en1_wcd_sleep {
 				mux {
-					pins = "gpio5";
+					pins = "gpio998";
 				};
 
 				config {
-					pins = "gpio5";
+					pins = "gpio998";
 					output-low;
 				};
 			};
 		};
+/* Huaqin modify for ZQL1820-740 by qiaoxiaokun at 2018/9/28 end */
 
 		wsa_spkr_wcd_sd1: msm_cdc_pinctrll {
 		      compatible = "qcom,msm-cdc-pinctrl";

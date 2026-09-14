@@ -24,22 +24,34 @@
 		qcom,msm-mclk-freq = <9600000>;
 		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <1>;
-		qcom,msm-micbias2-ext-cap;
-		qcom,msm-hs-micbias-type = "external";
+
+		/* Huaqin: Изменение HP micbias на внутренний & внешний PA */
+		qcom,msm-micbias1-ext-cap;
+		qcom,msm-hs-micbias-type = "internal";
+		qcom,wsa-disable;
+		qcom,msm-spk-ext-pa = <&tlmm 24 0>;
+		qcom,msm-hph-ext-sw = <&tlmm 66 0>, <&tlmm 94 0>;
+
 		qcom,us-euro-gpios = <&us_euro_gpio>;
 		qcom,cdc-pdm-gpios = <&cdc_pdm_gpios>;
 		qcom,cdc-comp-gpios = <&cdc_comp_gpios>;
 		qcom,cdc-dmic-gpios = <&cdc_dmic_gpios>;
-		qcom,audio-routing = "RX_BIAS", "INT_MCLK0",
+
+		/* Huaqin: Конфигурация NXP PA I2S GPIO */
+		qcom,tert-mi2s-gpios = <&tert_mi2s_gpios>;
+
+		qcom,audio-routing =
+			"RX_BIAS", "INT_MCLK0",
 			"SPK_RX_BIAS", "INT_MCLK0",
 			"INT_LDO_H", "INT_MCLK0",
 			"RX_I2S_CLK", "INT_MCLK0",
 			"TX_I2S_CLK", "INT_MCLK0",
+			/* Huaqin: Маршрутизация на внутренний Micbias2 */
 			"MIC BIAS External", "Handset Mic",
-			"MIC BIAS External2", "Headset Mic",
+			"MIC BIAS Internal2", "Headset Mic",
 			"MIC BIAS External", "Secondary Mic",
 			"AMIC1", "MIC BIAS External",
-			"AMIC2", "MIC BIAS External2",
+			"AMIC2", "MIC BIAS Internal2",
 			"AMIC3", "MIC BIAS External",
 			"DMIC1", "MIC BIAS External",
 			"MIC BIAS External", "Digital Mic1",
@@ -492,4 +504,30 @@
 			};
 		};
 	};
+
+	/* Huaqin add for config nxp pa i2s by xudayi at 2018/03/03 start */
+	tert_mi2s_gpios: tert_mi2s_pinctrl {
+		compatible = "qcom,msm-cdc-pinctrl";
+		pinctrl-names = "aud_active", "aud_sleep";
+		pinctrl-0 = <&ter_mi2s_clk_active &ter_mi2s_ws_active
+			&ter_mi2s_sd0_active &ter_mi2s_sd1_active>;
+		pinctrl-1 = <&ter_mi2s_clk_sleep &ter_mi2s_ws_sleep
+			&ter_mi2s_sd0_sleep &ter_mi2s_sd1_sleep>;
+		qcom,lpi-gpios;
+	};
+	/* Huaqin add for config nxp pa i2s by xudayi at 2018/03/03 end */
 };
+
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 start */
+/* Описание pinctrl для пина GPIO3 (определение ID адаптера) под ядро 4.19:
+&pm660_gpios {
+	pm660_gpio3_adapter: pm660_gpio3_adapter {
+		pins = "gpio3";
+		function = "normal";
+		bias-pull-up;
+		qcom,drive-strength = <2>;
+		power-source = <0>;
+	};
+};
+*/
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 end */

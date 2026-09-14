@@ -365,45 +365,6 @@
 		clock-names = "cam_src_clk", "cam_clk";
 		qcom,clock-rates = <24000000 0>;
 	};
-
-	qcom,camera@3 {
-		cell-index = <3>;
-		compatible = "qcom,camera";
-		reg = <0x03>;
-		qcom,csiphy-sd-index = <1>;
-		qcom,csid-sd-index = <1>;
-		qcom,mount-angle = <90>;
-		qcom,led-flash-src = <&led_flash1>;
-		qcom,actuator-src = <&actuator2>;
-		qcom,eeprom-src = <&eeprom2>;
-		cam_vio-supply = <&pm660_l11>;
-		cam_vana-supply = <&cam_avdd_gpio_regulator>;
-		cam_vdig-supply = <&cam_dvdd_gpio_regulator>;
-		qcom,cam-vreg-name = "cam_vio", "cam_vana", "cam_vdig";
-		qcom,cam-vreg-min-voltage = <1780000 0 0>;
-		qcom,cam-vreg-max-voltage = <1950000 0 0>;
-		qcom,cam-vreg-op-mode = <105000 0 0>;
-		qcom,gpio-no-mux = <0>;
-		pinctrl-names = "cam_default", "cam_suspend";
-		pinctrl-0 = <&cam_sensor_mclk3_active
-				 &cam_sensor_front_iris_active>;
-		pinctrl-1 = <&cam_sensor_mclk3_suspend
-				 &cam_sensor_front_iris_suspend>;
-		gpios = <&tlmm 35 0>,
-			<&tlmm 52 0>;
-		qcom,gpio-reset = <1>;
-		qcom,gpio-req-tbl-num = <0 1>;
-		qcom,gpio-req-tbl-flags = <1 0>;
-		qcom,gpio-req-tbl-label = "CAMIF_MCLK3",
-					"CAM_RESET3";
-		qcom,sensor-position = <1>;
-		qcom,sensor-mode = <0>;
-		qcom,cci-master = <1>;
-		clocks = <&clock_mmss MCLK3_CLK_SRC>,
-			<&clock_mmss MMSS_CAMSS_MCLK3_CLK>;
-		clock-names = "cam_src_clk", "cam_clk";
-		qcom,clock-rates = <24000000 0>;
-	};
 };
 
 &pm660l_gpios {
