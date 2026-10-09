@@ -139,7 +139,7 @@
 	/* Huaqin add for ZQL1820-145 by zhaojunhai1 at 2018/08/06 end */
 };
 
-&i2c_6 { /* BLSP1 QUP6 (NFC) */
+&i2c_6 { /* BLSP1 QUP6 (NFC & NXP TFA9874) */
 	status = "okay";
 	nq@28 {
 		compatible = "qcom,nq-nci";
@@ -250,12 +250,6 @@
 	qcom,battery-thermal-coefficients = [9d 50 ff];
 };
 
-/* Huaqin modify for TT1308440 by liunianliang at 2019/05/27 start */
-/*&pm660_haptics {
-	qcom,vmax-mv = <1800>;
-};*/
-/* Huaqin modify for TT1308440 by liunianliang at 2019/05/27 end */
-
 &i2c_2 {
 	status = "ok";
 	smb1351_charger: smb1351-charger@1d {
@@ -268,6 +262,11 @@
 	};
 };
 
+/* ============================================================
+ *  АУДИОКОНФИГУРАЦИЯ ASUS X01BD (ZenFone Max Pro M2)
+ * ============================================================ */
+
+/* Отключаем Tavil - физически отсутствует */
 &wcd934x_cdc {
 	status = "disabled";
 };
@@ -280,21 +279,43 @@
 	status = "disabled";
 };
 
+/* Включаем опорный клок для Tasha */
 &clock_audio {
 	status = "ok";
 };
 
+/* 
+ * ОСВОБОЖДАЕМ GPIO18:
+ * Оставляем клок включенным в памяти ядра (иначе Tasha/wcd9335 выдаст ошибку probe),
+ * но полностью отвязываем его от физического пина GPIO18.
+ */
 &clock_audio_native {
 	status = "ok";
+	qcom,use-pinctrl = <0>;
+	/delete-property/ pinctrl-names;
+	/delete-property/ pinctrl-0;
+	/delete-property/ pinctrl-1;
 };
 
+/* Включаем кодек Tasha (необходим для работы звуковой карты) */
 &wcd9335 {
 	status = "ok";
 };
 
+/* 
+ * НАСТРОЙКА ЗВУКОВОЙ КАРТЫ TASHA С ПОЛНЫМ ИСКЛЮЧЕНИЕМ WSA
+ */
 &tasha_snd {
 	status = "ok";
-	qcom,model = "sdm660-tasha-skus-snd-card";
+	qcom,model = "sdm660-snd-card-x01bd";
+	qcom,wsa-disable; /* Полное отключение WSA в драйвере */
+
+	/* Удаляем свойства WSA, вызывавшие ошибку "no source widget found" */
+	/delete-property/ qcom,wsa-max-devs;
+	/delete-property/ qcom,wsa-devs;
+	/delete-property/ qcom,wsa-aux-dev-prefix;
+
+	/* Чистая таблица маршрутизации без WSA */
 	qcom,audio-routing =
 		"AIF4 VI", "MCLK",
 		"RX_BIAS", "MCLK",
@@ -306,43 +327,43 @@
 		"DMIC3", "MIC BIAS3",
 		"MIC BIAS3", "Digital Mic3",
 		"DMIC5", "MIC BIAS3",
-		"MIC BIAS3", "Digital Mic5",
-		"SpkrLeft IN", "SPK1 OUT";
+		"MIC BIAS3", "Digital Mic5";
+
 	qcom,msm-mbhc-hphl-swh = <1>;
 	qcom,msm-mbhc-gnd-swh = <1>;
 	/delete-property/ qcom,us-euro-gpios;
 	/delete-property/ qcom,hph-en0-gpio;
 	/delete-property/ qcom,hph-en1-gpio;
-	qcom,wsa-max-devs = <1>;
-	qcom,wsa-devs = <&wsa881x_211>, <&wsa881x_213>;
-	qcom,wsa-aux-dev-prefix = "SpkrLeft", "SpkrLeft";
 };
 
-/* Huaqin modify for 1820 tp by zhangxiude at 2018/08/08 start */
+/* Huaqin modify for 1820 tp by zhangxiude at 2018/08/08  start */
+/* ============================================================
+ *  Тачскрин (Touchscreen) Novatek & Himax
+ * ============================================================ */
 &i2c_4{
 	status = "okay";
 	qcom,disable-dma;
-	
 	/* Novatek device tree node */
 	novatek@62 {
 		compatible = "novatek,NVT-ts";
-		qcom,i2c-touch-active = "novatek, NVT-ts";
 		reg = <0x62>;
 		status = "okay";
 
 		vdd-supply = <&pm660_l11>;    //VDDIO
 		avdd-supply = <&pm660l_l3>;    //VDD
-        
-        novatek,reset-gpio = <&tlmm 66 0x00>;
-		novatek,irq-gpio = <&tlmm 67 0x2008>;
-		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
-		pinctrl-0 = <&ts_active>;
-        pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
-		novatek,config-array-size = <2>;
 
-		lcm_lab-supply = <&lcdb_ldo_vreg>;
-		lcm_ibb-supply = <&lcdb_ncp_vreg>;
+/* Huaqin add for ZQL1820-796 by zhangxiude at 2018/9/30 start */
+		//novatek,reset-gpio = <&tlmm 66 0x00>;
+/* Huaqin add for ZQL1820-796 by zhangxiude at 2018/9/30 end */
+		novatek,irq-gpio = <&tlmm 67 0>;
 
+// Huaqin add for VSN/VSP by xudongfang at 2018/9/5 start
+			lcm_lab-supply = <&lcdb_ldo_vreg>;
+			lcm_ibb-supply = <&lcdb_ncp_vreg>;
+// Huaqin add for VSN/VSP by xudongfang at 2018/9/5 end
+
+// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  start
+/* Huaqin modify for tp ito by zhangxiude at 2018/08/10 start */
 		/* MP */
 		novatek,mp-support-dt;
 
@@ -783,28 +804,29 @@
 				(-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50)
 				(-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50) (-50)
 				(-50) (-50) (-50)>;
+/* Huaqin modify for tp ito by zhangxiude at 2018/08/10 end */
 			PS_Config_Diff_Test_Frame = <50>;
 		};
 	};
-
 	himax_ts@48 {
-		compatible = "himax,hxcommon";
-		reg = <0x48>;
-		status = "okay";
-		interrupt-parent = <&tlmm>;
-		interrupts = <67 0x00>;
-		vdd-supply = <&pm660_l11>;
-		avdd-supply = <&pm660l_l3>;
-		lcm_lab-supply = <&lcdb_ldo_vreg>;
-		lcm_ibb-supply = <&lcdb_ncp_vreg>;
-		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
-		pinctrl-0 = <&ts_active>;
-		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
-		himax,panel-coords = <0 1080 0 2280>;
-		himax,display-coords = <0 1080 0 2280>;
-		himax,irq-gpio = <&tlmm 67 0x2008>;
-		himax,rst-gpio = <&tlmm 66 0x00>;
-		report_type = <1>;
-	};
+			compatible             	= "himax,hxcommon";
+			reg                    	= <0x48>;
+			interrupt-parent       	= <&tlmm>;
+			interrupts             	= <67 0x00>;
+			vdd-supply 		= <&pm660_l11>;
+			avdd-supply 		= <&pm660l_l3>;
+/* Huaqin add for ZQL1820-701 by zhangxiude at 2018/9/19 start */
+			lcm_lab-supply = <&lcdb_ldo_vreg>;
+			lcm_ibb-supply = <&lcdb_ncp_vreg>;
+/* Huaqin add for ZQL1820-701 by zhangxiude at 2018/9/19 end */
+			pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+			pinctrl-0 = <&ts_active>;
+			pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
+			himax,panel-coords   	= <0 1080 0 2280>;
+			himax,display-coords 	= <0 1080 0 2280>;
+			himax,irq-gpio       	= <&tlmm 67 0x00>;
+			himax,rst-gpio 		= <&tlmm 66 0x00>;
+			report_type             = <1>;
+		};
 };
 /* Huaqin modify for 1820 tp by zhangxiude at 2018/08/08 end */

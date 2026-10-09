@@ -16,9 +16,11 @@
 #include "mdss_panel.h"
 #include "mdss_dsi_cmd.h"
 #include "mdss_dsi_clk.h"
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  start
+
+#ifdef CONFIG_MACH_ASUS_X00TD
 extern int nvt_tp_check;
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  end
+#endif
+
 #define MMSS_SERDES_BASE_PHY 0x04f01000 /* mmss (De)Serializer CFG */
 
 #define MIPI_OUTP(addr, data) writel_relaxed((data), (addr))
@@ -447,9 +449,9 @@ struct mdss_dsi_ctrl_pdata {
 	int irq_cnt;
 	int disp_te_gpio;
 	int rst_gpio;
-/* Huaqin modify for time sequence by qimaokang at 2018/09/28 start*/
+#ifdef CONFIG_MACH_ASUS_X01BD
 	int tp_rst_gpio;
-/* Huaqin modify for time sequence by qimaokang at 2018/09/28 end*/
+#endif
 	int disp_en_gpio;
 	int bklt_en_gpio;
 	bool bklt_en_gpio_invert;
@@ -501,9 +503,9 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds off_cmds;
 	struct dsi_panel_cmds lp_on_cmds;
 	struct dsi_panel_cmds lp_off_cmds;
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
+#ifdef CONFIG_MACH_ASUS_SDM660
 	struct dsi_panel_cmds esd_recover_cmds;
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
+#endif
 	struct dsi_panel_cmds status_cmds;
 	u32 *status_valid_params;
 	u32 *status_cmds_rlen;
@@ -602,9 +604,9 @@ struct dsi_status_data {
 	struct notifier_block fb_notifier;
 	struct delayed_work check_status;
 	struct msm_fb_data_type *mfd;
-/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot start*/
+#ifdef CONFIG_MACH_ASUS_SDM660
 	bool is_first_check;
-/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot end*/
+#endif
 };
 
 void mdss_dsi_read_hw_revision(struct mdss_dsi_ctrl_pdata *ctrl);

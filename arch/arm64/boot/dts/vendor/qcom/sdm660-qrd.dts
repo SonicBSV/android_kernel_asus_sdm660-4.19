@@ -33,15 +33,6 @@
 	qcom,mdss-pref-prim-intf = "dsi";
 };
 
-&mdss_dp_ctrl {
-	pinctrl-names = "mdss_dp_active", "mdss_dp_sleep";
-	pinctrl-0 = <&mdss_dp_aux_active &mdss_dp_usbplug_cc_active>;
-	pinctrl-1 = <&mdss_dp_aux_suspend &mdss_dp_usbplug_cc_suspend>;
-	qcom,aux-en-gpio = <&tlmm 55 0>;
-	qcom,aux-sel-gpio = <&tlmm 56 0>;
-	qcom,usbplug-cc-gpio = <&tlmm 58 0>;
-};
-
 &mdss_dsi {
 	hw-config = "single_dsi";
 };
@@ -68,7 +59,7 @@
 
 &dsi_dual_nt36850_truly_cmd {
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
 	qcom,mdss-dsi-force-clock-lane-hs;
@@ -78,7 +69,7 @@
 /* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 start */
 &dsi_nt36672ah_1080p_video_kd {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,mdss-dsi-force-clock-lane-hs;
 	/delete-property/ qcom,esd-check-enabled;
@@ -88,7 +79,7 @@
 /* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 start */
 &dsi_hx83112a_1080p_video_tm {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,mdss-dsi-force-clock-lane-hs;
 	/delete-property/ qcom,esd-check-enabled;
@@ -96,13 +87,6 @@
 /* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 end */
 
 /* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 start */
-
-&pm660l_wled {
-	qcom,led-strings-list = [00 01];       /* ИСПРАВЛЕНО: Байтовый формат [] */
-	qcom,enabled-strings = [00 01];        /* ИСПРАВЛЕНО: Байтовый формат [] */
-	qcom,default-led-sink-config = <0x3>;  /* u32 здесь оставляем в <> */
-	status = "ok";
-};
 
 &pm660l_lcdb {
 	status = "ok";
@@ -229,3 +213,64 @@
 	};
 };
 /* Huaqin add for als/ps by zhuqiang at 2018/08/03 end */
+
+&cci {
+	qcom,eeprom@3 {
+		status = "disabled";
+	};
+
+	qcom,camera@3 {
+		status = "disabled";
+	};
+};
+
+&pm660l_wled {
+	/* ФИКС: Явно переопределяем каналы под физическую разводку дисплея X01BD (0, 1, 3)
+	 * и задаем маску 0xb (0xb0 в регистре) для устранения предупреждения WLED */
+	qcom,led-strings-list = [00 01 03];
+	qcom,enabled-strings = [00 01 03];
+	qcom,default-led-sink-config = <0xb>;
+	status = "ok";
+};
+
+&pm660_haptics {
+    compatible = "qcom,qpnp-haptics";
+    reg = <0xc000 0x100>;
+    interrupts = <0x1 0xc0 0x0 IRQ_TYPE_EDGE_BOTH>,
+                 <0x1 0xc0 0x1 IRQ_TYPE_EDGE_BOTH>;
+    interrupt-names = "hap-sc-irq", "hap-play-irq";
+    qcom,pmic-revid = <&pm660_revid>;
+
+    qcom,actuator-type = <1>;       /* 1 = ERM */
+    qcom,play-mode = "direct";
+    qcom,vmax-mv = <3596>;
+    qcom,ilim-ma = <800>;
+    qcom,sc-dbc-cycles = <8>;
+    qcom,wave-play-rate-us = <6667>;
+    qcom,en-brake;
+
+    status = "okay";
+};
+
+&sdhc_2 {
+	/delete-property/ interrupt-map;
+	
+	/* ИСПРАВЛЕНО: Ровно по 3 ячейки для GIC (&intc 0 <irq> <trigger>) */
+	interrupt-map = <0 &intc 0 125 4>,
+			<1 &intc 0 221 4>,
+			<2 &tlmm 54 3>;
+
+	/* cd-gpios тип EDGE_BOTH (0x3) для детекции карты */
+	cd-gpios = <&tlmm 54 0x3>;
+
+	/* ФИКС: Добавляем калибровочные частоты sdhc для устранения Reset data parsing error */
+	qcom,dll-hsr-list = <0x00078000 0x00078000 0x00078000 0x00078000 0x00078000>;
+};
+
+&mdss_dp_ctrl {
+	status = "disabled";
+};
+
+&mdss_dp_pll {
+	status = "disabled";
+};

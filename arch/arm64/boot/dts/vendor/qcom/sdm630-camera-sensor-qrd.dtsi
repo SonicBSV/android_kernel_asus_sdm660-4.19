@@ -12,6 +12,7 @@
  */
 
 &soc {
+
 	led_flash0: qcom,camera-flash@0 {
 		cell-index = <0>;
 		compatible = "qcom,camera-flash";
@@ -23,14 +24,13 @@
 
 	led_flash1: qcom,camera-subflash@1 {
 		cell-index = <1>;
-		compatible = "com,camera-subflash";
+		compatible = "qcom,camera-subflash";
 		qcom,flash-source = <&pm660l_flash1>;
 		qcom,torch-source = <&pm660l_torch1>;
 		qcom,switch-source = <&pm660l_switch1>;
 		status = "ok";
 	};
 
-	/* Основной регулятор аналогового питания камер (AVDD) */
 	cam_avdd_gpio_regulator: cam_avdd_fixed_regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "cam_vadd_gpio_regulator";
@@ -40,14 +40,17 @@
 		gpio = <&tlmm 51 0>;
 		vin-supply = <&pm660l_bob>;
 	};
+
 };
 
 &tlmm {
 	cam_sensor_rear_active: cam_sensor_rear_active {
+		/* RESET */
 		mux {
 			pins = "gpio46";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio46";
 			bias-disable; /* No PULL */
@@ -56,62 +59,72 @@
 	};
 
 	cam_sensor_rear_suspend: cam_sensor_rear_suspend {
+		/* RESET */
 		mux {
 			pins = "gpio46";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio46";
-			bias-disable;
-			drive-strength = <2>;
+			bias-disable; /* No PULL */
+			drive-strength = <2>; /* 2 MA */
 		};
 	};
 
 	cam_sensor_rear2_active: cam_sensor_rear2_active {
+		/* RESET */
 		mux {
 			pins = "gpio48";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio48";
-			bias-disable;
-			drive-strength = <2>;
+			bias-disable; /* No PULL */
+			drive-strength = <2>; /* 2 MA */
 		};
 	};
 
 	cam_sensor_rear2_suspend: cam_sensor_rear2_suspend {
+		/* RESET */
 		mux {
 			pins = "gpio48";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio48";
-			bias-disable;
-			drive-strength = <2>;
+			bias-disable; /* No PULL */
+			drive-strength = <2>; /* 2 MA */
 		};
 	};
 
 	cam_sensor_front_active: cam_sensor_front_active {
+		/* RESET */
 		mux {
 			pins = "gpio47";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio47";
-			bias-disable;
-			drive-strength = <2>;
+			bias-disable; /* No PULL */
+			drive-strength = <2>; /* 2 MA */
 		};
 	};
 
 	cam_sensor_front_suspend: cam_sensor_front_suspend {
+		/* RESET */
 		mux {
 			pins = "gpio47";
 			function = "gpio";
 		};
+
 		config {
 			pins = "gpio47";
-			bias-disable;
-			drive-strength = <2>;
+			bias-disable; /* No PULL */
+			drive-strength = <2>; /* 2 MA */
 		};
 	};
 };
@@ -124,13 +137,6 @@
 		qcom,cci-master = <0>;
 	};
 
-	/* Безусловное удаление фантомных узлов Iris-сканера и OIS */
-	/delete-node/ qcom,actuator@1;
-	/delete-node/ qcom,ois@0;
-	/delete-node/ qcom,eeprom@3;
-	/delete-node/ qcom,camera@3;
-
-	/* 1. Основная задняя камера (EEPROM) */
 	eeprom0: qcom,eeprom@0 {
 		cell-index = <0>;
 		reg = <0>;
@@ -169,7 +175,6 @@
 		qcom,clock-rates = <24000000 0>;
 	};
 
-	/* 2. Фронтальная камера (EEPROM) */
 	eeprom1: qcom,eeprom@1 {
 		cell-index = <1>;
 		reg = <0x1>;
@@ -183,9 +188,9 @@
 		qcom,cam-vreg-op-mode = <105000 0 105000>;
 		qcom,gpio-no-mux = <0>;
 		pinctrl-names = "cam_default", "cam_suspend";
-		pinctrl-0 = <&cam_sensor_mclk1_active
-				 &cam_sensor_front_active
-				 &cam_sensor_eldo3_default>; /* Питание ELDO3 */
+	        pinctrl-0 = <&cam_sensor_mclk1_active
+			         &cam_sensor_front_active
+			         &cam_sensor_eldo3_default>;
 		pinctrl-1 = <&cam_sensor_mclk1_suspend
 				 &cam_sensor_front_suspend>;
 		gpios = <&tlmm 33 0>,
@@ -208,7 +213,6 @@
 		qcom,clock-rates = <24000000 0>;
 	};
 
-	/* 3. Основная задняя камера (Сенсор) */
 	qcom,camera@0 {
 		cell-index = <0>;
 		compatible = "qcom,camera";
@@ -218,14 +222,17 @@
 		qcom,mount-angle = <270>;
 		qcom,led-flash-src = <&led_flash0>;
 		qcom,actuator-src = <&actuator0>;
+		//qcom,ois-src = <&ois0>;
 		qcom,eeprom-src = <&eeprom0>;
 		cam_vio-supply = <&pm660_l11>;
 		cam_vana-supply = <&cam_avdd_gpio_regulator>;
 		cam_vdig-supply = <&pm660_s5>;
 		cam_vaf-supply = <&pm660l_l8>;
 		qcom,cam-vreg-name = "cam_vio", "cam_vana", "cam_vdig", "cam_vaf";
+		/*Huaqin modify for af_vdd voltage by lizihao at 2015/02/05 start*/
 		qcom,cam-vreg-min-voltage = <1780000 0 1224000 2800000>;
 		qcom,cam-vreg-max-voltage = <1950000 0 1350000 2800000>;
+		/*Huaqin modify for af_vdd voltage by lizihao at 2015/02/05 end*/
 		qcom,cam-vreg-op-mode = <105000 0 105000 100000>;
 		qcom,gpio-no-mux = <0>;
 		pinctrl-names = "cam_default", "cam_suspend";
@@ -253,7 +260,6 @@
 		qcom,clock-rates = <24000000 0>;
 	};
 
-	/* 4. Фронтальная камера (Сенсор) */
 	qcom,camera@1 {
 		cell-index = <1>;
 		compatible = "qcom,camera";
@@ -267,14 +273,16 @@
 		cam_vana-supply = <&cam_avdd_gpio_regulator>;
 		cam_vdig-supply = <&pm660_s5>;
 		qcom,cam-vreg-name = "cam_vio", "cam_vana", "cam_vdig";
+		/*Huaqin modify for af_vdd voltage by lizihao at 2015/02/05 start*/
 		qcom,cam-vreg-min-voltage = <1780000 0 1224000>;
 		qcom,cam-vreg-max-voltage = <1950000 0 1350000>;
+		/*Huaqin modify for af_vdd voltage by lizihao at 2015/02/05 end*/
 		qcom,cam-vreg-op-mode = <105000 0 105000>;
 		qcom,gpio-no-mux = <0>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk1_active
-				 &cam_sensor_front_active
-				 &cam_sensor_eldo3_default>; /* Включение ELDO3 */
+				&cam_sensor_front_active
+				&cam_sensor_eldo3_default>;
 		pinctrl-1 = <&cam_sensor_mclk1_suspend
 				 &cam_sensor_front_suspend>;
 		gpios = <&tlmm 33 0>,
@@ -297,7 +305,7 @@
 		qcom,clock-rates = <24000000 0>;
 	};
 
-	/* 5. Дополнительная задняя камера (Сенсор глубины GC5025) */
+/* Huaqin modify for add sub camera dts config by lizihao at 2018/02/11 start*/
 	qcom,camera@2 {
 		cell-index = <2>;
 		compatible = "qcom,camera";
@@ -305,7 +313,9 @@
 		qcom,csiphy-sd-index = <1>;
 		qcom,csid-sd-index = <1>;
 		qcom,mount-angle = <270>;
+		/* Huaqin add for gc5025 eeprom by lizihao at 2018/03/23 start*/
 		qcom,eeprom-src = <&eeprom0>;
+		/* Huaqin add for gc5025 eeprom by lizihao at 2018/03/23 end*/
 		cam_vio-supply = <&pm660_l11>;
 		cam_vana-supply = <&cam_avdd_gpio_regulator>;
 		cam_vdig-supply = <&pm660_s5>;
@@ -316,8 +326,8 @@
 		qcom,gpio-no-mux = <0>;
 		pinctrl-names = "cam_default", "cam_suspend";
 		pinctrl-0 = <&cam_sensor_mclk3_active
-				 &cam_sensor_rear2_active
-				 &cam_sensor_eldo4_default>; /* Включение ELDO4 */
+				&cam_sensor_rear2_active
+				&cam_sensor_eldo4_default>;
 		pinctrl-1 = <&cam_sensor_mclk3_suspend
 				 &cam_sensor_rear2_suspend>;
 		gpios = <&tlmm 35 0>,
@@ -339,9 +349,10 @@
 		clock-names = "cam_src_clk", "cam_clk";
 		qcom,clock-rates = <24000000 0>;
 	};
+/* Huaqin modify for add sub camera dts config by lizihao at 2018/02/11 end*/
+
 };
 
-/* ИСПРАВЛЕНО: Полная адаптация аппаратных ELDO-пинов питания Asus X00TD под 4.19 pinctrl */
 &pm660l_gpios {
 	cam_sensor_eldo3 {
 		cam_sensor_eldo3_default: cam_sensor_eldo3_default {
@@ -351,12 +362,11 @@
 			bias-disable;
 		};
 	};
-
 	cam_sensor_eldo4 {
 		cam_sensor_eldo4_default: cam_sensor_eldo4_default {
 			pins = "gpio4";
 			function = "normal";
-			output-low; /* Выключен по умолчанию для экономии энергии */
+			output-low;
 			bias-disable;
 		};
 	};

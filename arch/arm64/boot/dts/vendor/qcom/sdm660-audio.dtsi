@@ -61,8 +61,6 @@
 			"MIC BIAS External", "Digital Mic3",
 			"DMIC4", "MIC BIAS External",
 			"MIC BIAS External", "Digital Mic4",
-			"SpkrLeft IN", "SPK1 OUT",
-			"SpkrRight IN", "SPK2 OUT",
 			"PDM_IN_RX1", "PDM_OUT_RX1",
 			"PDM_IN_RX2", "PDM_OUT_RX2",
 			"PDM_IN_RX3", "PDM_OUT_RX3",
@@ -141,6 +139,7 @@
 	};
 
 	tavil_snd: sound-tavil {
+		status = "disabled";
 		compatible = "qcom,sdm660-asoc-snd-tavil";
 		qcom,model = "sdm660-tavil-snd-card";
 		qcom,mi2s-audio-intf;
@@ -171,9 +170,7 @@
 			"DMIC4", "MIC BIAS4",
 			"MIC BIAS4", "Digital Mic4",
 			"DMIC5", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic5",
-			"SpkrLeft IN", "SPK1 OUT",
-			"SpkrRight IN", "SPK2 OUT";
+			"MIC BIAS4", "Digital Mic5";
 
 		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <1>;
@@ -294,6 +291,7 @@
 	};
 
 	wcd934x_cdc: tavil_codec {
+		status = "disabled";
 		compatible = "qcom,tavil-slim-pgd";
 		elemental-addr = [00 01 50 02 17 02];
 

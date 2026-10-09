@@ -23,18 +23,16 @@
 #include "mdss_debug.h"
 #include "mdss_dsi_phy.h"
 #include "mdss_dba_utils.h"
-#include "mdss_livedisplay.h"
 
-/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 start */
+#ifdef CONFIG_MACH_ASUS_SDM660
 #include "mdss_panel.h"
-/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 end */
-
+#endif
 
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
-/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 start */
+#ifdef CONFIG_MACH_ASUS_SDM660
 extern char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
-/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 end */
+#endif
 
 /* Master structure to hold all the information about the DSI/panel */
 static struct mdss_dsi_data *mdss_dsi_res;
@@ -359,9 +357,12 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev,
 
 	return rc;
 }
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
-extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,struct dsi_panel_cmds *pcmds, u32 flags);
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
+
+#ifdef CONFIG_MACH_ASUS_SDM660
+extern void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+					struct dsi_panel_cmds *pcmds,
+					u32 flags);
+#endif
 static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 {
 	int ret = 0;
@@ -381,25 +382,21 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
 		ret = 0;
 	}
-	/* Huaqin modify for Modification sequence by qimaokangat 2018/05/31 start  */
-	/* Huaqin modify for sequence test by xieguoqiang at 2018/01/25 start  */
+
 	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
+
+#ifdef CONFIG_MACH_ASUS_SDM660
 	mdelay(5);
-	/* Huaqin modify for sequence test by xieguoqiang at 2018/01/25 end */
-	/* Huaqin modify for Modification sequence by qimaokangat 2018/05/31 end  */
-/* Huaqin modify for ZQL1650-1523 by diganyun at 2018/06/07 start */
-	/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 start  */
-	if(strstr(mdss_mdp_panel,"qcom,mdss_dsi_td4310_1080p_video_txd") == NULL ) {
-		ret = msm_dss_enable_vreg(
-			ctrl_pdata->panel_power_data.vreg_config,
-			ctrl_pdata->panel_power_data.num_vreg, 0);
-		if (ret)
-			pr_err("%s: failed to disable vregs for %s\n",
-				__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
-	}
-	/* Huaqin modify for Modification sequence by qimaokang at 2018/06/25 end  */
-/* Huaqin modify for ZQL1650-1523 by diganyun at 2018/06/07 end */
+#endif
+
+	ret = msm_dss_enable_vreg(
+		ctrl_pdata->panel_power_data.vreg_config,
+		ctrl_pdata->panel_power_data.num_vreg, 0);
+	if (ret)
+		pr_err("%s: failed to disable vregs for %s\n",
+			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+
 end:
 	return ret;
 }
@@ -1025,6 +1022,7 @@ struct dentry *dsi_debugfs_create_dcs_cmd(const char *name, umode_t mode,
 #define DEBUGFS_CREATE_DCS_CMD(name, node, cmd, ctrl_cmd) \
 	dsi_debugfs_create_dcs_cmd(name, 0644, node, cmd, ctrl_cmd)
 
+#ifdef CONFIG_DEBUG_FS
 static int mdss_dsi_debugfs_setup(struct mdss_panel_data *pdata,
 			struct dentry *parent)
 {
@@ -1075,7 +1073,9 @@ static int mdss_dsi_debugfs_setup(struct mdss_panel_data *pdata,
 	ctrl_pdata->debugfs_info = dfs;
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_DEBUG_FS
 static int mdss_dsi_debugfs_init(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	int rc;
@@ -1119,6 +1119,7 @@ static void mdss_dsi_debugfs_cleanup(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 	} while (pdata);
 	pr_debug("%s: Cleaned up mdss_dsi_debugfs_info\n", __func__);
 }
+#endif
 
 static int _mdss_dsi_refresh_cmd(struct buf_data *new_cmds,
 	struct dsi_panel_cmds *original_pcmds)
@@ -1315,13 +1316,10 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 		pr_debug("%s: dsi_off with panel always on\n", __func__);
 		goto panel_power_ctrl;
 	}
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
-        ret = mdss_dsi_panel_power_ctrl(pdata, power_state);
-        /*if (ret) {
-                pr_err("%s: Panel power off failed\n", __func__);
-                goto end;
-        }*/
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
+
+#ifdef CONFIG_MACH_ASUS_SDM660
+	ret = mdss_dsi_panel_power_ctrl(pdata, power_state);
+#endif
 	/*
 	 * Link clocks should be turned off before PHY can be disabled.
 	 * For command mode panels, all clocks are turned off prior to reaching
@@ -1349,13 +1347,14 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 			  MDSS_DSI_CORE_CLK, MDSS_DSI_CLK_OFF);
 
 panel_power_ctrl:
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
-	/*ret = mdss_dsi_panel_power_ctrl(pdata, power_state);
+#ifndef CONFIG_MACH_ASUS_SDM660
+	ret = mdss_dsi_panel_power_ctrl(pdata, power_state);
 	if (ret) {
 		pr_err("%s: Panel power off failed\n", __func__);
 		goto end;
-	}*/
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
+	}
+#endif
+
 	if (panel_info->dynamic_fps
 	    && (panel_info->dfps_update == DFPS_SUSPEND_RESUME_MODE)
 	    && (panel_info->new_fps != panel_info->mipi.frame_rate))
@@ -2371,6 +2370,7 @@ end_update:
 	return rc;
 }
 
+#ifndef CONFIG_MACH_ASUS_X00TD
 static int mdss_dsi_dynamic_bitclk_config(struct mdss_panel_data *pdata)
 {
 	int rc = 0;
@@ -2413,6 +2413,7 @@ static int mdss_dsi_dynamic_bitclk_config(struct mdss_panel_data *pdata)
 	}
 	return rc;
 }
+#endif
 
 static int mdss_dsi_dfps_config(struct mdss_panel_data *pdata, int new_fps)
 {
@@ -2865,13 +2866,28 @@ static ssize_t dynamic_bitclk_store(struct device *dev,
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_MACH_ASUS_X00TD
+	rc = __mdss_dsi_dynamic_clock_switch(&ctrl_pdata->panel_data,
+		clk_rate);
+	if (!rc && mdss_dsi_is_hw_config_split(ctrl_pdata->shared_data)) {
+#else
 	pinfo->new_clk_rate = clk_rate;
 	if (mdss_dsi_is_hw_config_split(ctrl_pdata->shared_data)) {
+#endif
 		struct mdss_dsi_ctrl_pdata *octrl =
 			mdss_dsi_get_other_ctrl(ctrl_pdata);
+#ifdef CONFIG_MACH_ASUS_X00TD
+		rc = __mdss_dsi_dynamic_clock_switch(&octrl->panel_data,
+			clk_rate);
+		if (rc)
+			pr_err("failed to switch DSI bitclk for sctrl\n");
+	} else if (rc) {
+		pr_err("failed to switch DSI bitclk\n");
+#else
 		struct mdss_panel_info *opinfo = &octrl->panel_data.panel_info;
 
 		opinfo->new_clk_rate = clk_rate;
+#endif
 	}
 	return count;
 } /* dynamic_bitclk_sysfs_wta */
@@ -3070,8 +3086,9 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		rc = mdss_dsi_panel_timing_switch(ctrl_pdata, arg);
 		break;
 	case MDSS_EVENT_FB_REGISTERED:
+#ifdef CONFIG_DEBUG_FS
 		mdss_dsi_debugfs_init(ctrl_pdata);
-
+#endif
 		fbi = (struct fb_info *)arg;
 		if (!fbi || !fbi->dev)
 			break;
@@ -3099,6 +3116,7 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 	case MDSS_EVENT_AVR_MODE:
 		mdss_dsi_avr_config(ctrl_pdata, (int)(unsigned long) arg);
 		break;
+#ifndef CONFIG_MACH_ASUS_X00TD
 	case MDSS_EVENT_DSI_DYNAMIC_BITCLK:
 		if (ctrl_pdata->panel_data.panel_info.dynamic_bitclk) {
 			rc = mdss_dsi_dynamic_bitclk_config(pdata);
@@ -3107,9 +3125,7 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 					rc);
 		}
 		break;
-	case MDSS_EVENT_UPDATE_LIVEDISPLAY:
-		rc = mdss_livedisplay_update(ctrl_pdata, (int)(unsigned long) arg);
-		break;
+#endif		
 	default:
 		pr_debug("%s: unhandled event=%d\n", __func__, event);
 		break;
@@ -3174,9 +3190,9 @@ static struct device_node *mdss_dsi_pref_prim_panel(
  *
  * returns pointer to panel node on success, NULL on error.
  */
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  start
-int nvt_tp_check = 0;
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  end
+#ifdef CONFIG_MACH_ASUS_X00TD
+int nvt_tp_check;
+#endif
 static struct device_node *mdss_dsi_find_panel_of_node(
 		struct platform_device *pdev, char *panel_cfg)
 {
@@ -3243,12 +3259,13 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 		}
 		pr_info("%s: cmdline:%s panel_name:%s\n",
 			__func__, panel_cfg, panel_name);
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  start
-		if (!strcmp(panel_name,"qcom,mdss_dsi_nt36672_1080p_video"))
+#ifdef CONFIG_MACH_ASUS_X00TD
+		if (!strcmp(panel_name, "qcom,mdss_dsi_nt36672_1080p_video"))
 			nvt_tp_check = 0;
-		else if (!strcmp(panel_name,"qcom,mdss_dsi_nt36672_1080p_video_txd"))
+		else if (!strcmp(panel_name,
+				"qcom,mdss_dsi_nt36672_1080p_video_txd"))
 			nvt_tp_check = 1;
-// Huaqin add for nvt_tp check function. by zhengwu.lu. at 2018/03/01  end
+#endif
 		if (!strcmp(panel_name, NONE_PANEL))
 			goto exit;
 
@@ -4212,7 +4229,9 @@ static int mdss_dsi_ctrl_remove(struct platform_device *pdev)
 	msm_dss_iounmap(&ctrl_pdata->mmss_misc_io);
 	msm_dss_iounmap(&ctrl_pdata->phy_io);
 	msm_dss_iounmap(&ctrl_pdata->ctrl_io);
+#ifdef CONFIG_DEBUG_FS
 	mdss_dsi_debugfs_cleanup(ctrl_pdata);
+#endif
 
 	if (ctrl_pdata->workq)
 		destroy_workqueue(ctrl_pdata->workq);
@@ -4559,13 +4578,14 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 		pr_err("%s:%d, reset gpio not specified\n",
 						__func__, __LINE__);
 
-/* Huaqin modify for time sequence by qimaokang at 2018/09/28 start*/
+#ifdef CONFIG_MACH_ASUS_X01BD
 	ctrl_pdata->tp_rst_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
-			 "qcom,platform-tp-reset-gpio", 0);
+			"qcom,platform-tp-reset-gpio", 0);
 	if (!gpio_is_valid(ctrl_pdata->tp_rst_gpio))
 		pr_err("%s:%d, tp reset gpio  %d not specified\n",
-						__func__, __LINE__,ctrl_pdata->tp_rst_gpio);
-/* Huaqin modify for time sequence by qimaokang at 2018/09/28 end*/
+						__func__, __LINE__,
+						ctrl_pdata->tp_rst_gpio);
+#endif
 
 	ctrl_pdata->lcd_mode_sel_gpio = of_get_named_gpio(
 			ctrl_pdev->dev.of_node, "qcom,panel-mode-gpio", 0);

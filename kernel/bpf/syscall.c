@@ -2135,6 +2135,9 @@ static int bpf_prog_load(union bpf_attr *attr, union bpf_attr __user *uattr)
 		return -E2BIG;
 	if (type != BPF_PROG_TYPE_SOCKET_FILTER &&
 	    type != BPF_PROG_TYPE_CGROUP_SKB &&
+#ifdef CONFIG_FUSE_BPF
+	    type != BPF_PROG_TYPE_FUSE &&
+#endif
 	    !bpf_capable())
 		return -EPERM;
 

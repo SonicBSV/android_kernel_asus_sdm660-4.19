@@ -1688,10 +1688,6 @@ static int _smblib_vbus_regulator_enable(struct regulator_dev *rdev)
 			smblib_err(chg, "Couldn't enable OTG rc=%d\n", rc);
 	}
 
-	/* ASUS BSP: mark OTG as active */
-	if (rc >= 0)
-		chg->x00td_otg_active = true;
-
 	return rc;
 }
 
@@ -1755,9 +1751,6 @@ static int _smblib_vbus_regulator_disable(struct regulator_dev *rdev)
 		smblib_err(chg, "Couldn't set OTG_ENG_OTG_CFG_REG rc=%d\n", rc);
 		return rc;
 	}
-
-	/* ASUS BSP: mark OTG as inactive */
-	chg->x00td_otg_active = false;
 
 	return 0;
 }
@@ -2795,7 +2788,15 @@ int smblib_get_prop_die_health(struct smb_charger *chg,
 
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
-#define DCP_CURRENT_UA			1500000
+/* Huaqin add for ZQL1650-1287 factory version remove before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/5/8 start */
+#ifdef HQ_BUILD_FACTORY
+/* Huaqin add for ZQL1650-71 before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/4/4 start */
+#define DCP_CURRENT_UA			2000000
+/* Huaqin add for ZQL1650-71 before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/4/4 end */
+#else
+#define DCP_CURRENT_UA			500000
+#endif
+/* Huaqin add for ZQL1650-1287 factory version remove before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/5/8 end */
 #define HVDCP_CURRENT_UA		3000000
 #define TYPEC_DEFAULT_CURRENT_UA	900000
 #define TYPEC_MEDIUM_CURRENT_UA		1500000
@@ -3621,22 +3622,8 @@ static void smblib_micro_usb_plugin(struct smb_charger *chg, bool vbus_rising)
 	if (vbus_rising) {
 		/* use the typec flag even though its not typec */
 		chg->typec_present = true;
-
-		/*
-		 * ASUS BSP (from 4.4):
-		 * Protect against double-triggering of charging flow.
-		 * The 12-second delay allows APSD and D+/D- to stabilize
-		 * before the charger driver configures current limits.
-		 * Without this, X00TD exhibits charging "bouncing".
-		 */
-		if (!chg->x00td_charging_flow_active) {
-			chg->x00td_charging_flow_active = true;
-			smblib_dbg(chg, PR_MISC,
-				   "X00TD: charger plugged, starting flow\n");
-		}
 	} else {
 		chg->typec_present = false;
-		chg->x00td_charging_flow_active = false;
 		smblib_update_usb_type(chg);
 		extcon_set_state_sync(chg->extcon, EXTCON_USB, false);
 		smblib_uusb_removal(chg);
@@ -3707,19 +3694,6 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 	}
 
 	vbus_rising = (bool)(stat & USBIN_PLUGIN_RT_STS_BIT);
-
-	/*
-	 * ASUS BSP (from 4.4):
-	 * When OTG boost is active, VBUS rising is caused by our own 5V.
-	 * Ignore it so charger detection (APSD/DPDM/parallel) does not
-	 * interfere with USB host mode.
-	 */
-	if (chg->x00td_otg_active && vbus_rising) {
-		smblib_dbg(chg, PR_INTERRUPT,
-			   "X00TD: ignore self VBUS while OTG active\n");
-		return;
-	}
-
 	smblib_set_opt_freq_buck(chg, vbus_rising ? chg->chg_freq.freq_5V :
 						chg->chg_freq.freq_removal);
 
@@ -3741,7 +3715,6 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 		vote(chg->awake_votable, PL_DELAY_VOTER, true, 0);
 		schedule_delayed_work(&chg->pl_enable_work,
 					msecs_to_jiffies(PL_DELAY_MS));
-
 		/* vbus rising when APSD was disabled and PD_ACTIVE = 0 */
 		if (get_effective_result(chg->apsd_disable_votable) &&
 				!chg->pd_active)
@@ -4147,22 +4120,10 @@ irqreturn_t smblib_handle_usb_source_change(int irq, void *data)
 	int rc = 0;
 	u8 stat;
 
-	/*
-	 * ASUS BSP (from 4.4):
-	 * While OTG boost is active, block APSD charger type detection.
-	 * Otherwise SMB2 toggles D+/D- and tears down USB host connection.
-	 */
-	if (chg->x00td_otg_active) {
-		smblib_dbg(chg, PR_INTERRUPT,
-			   "X00TD: ignore source change while OTG active\n");
-		return IRQ_HANDLED;
-	}
-
 	if (chg->fake_usb_insertion)
 		return IRQ_HANDLED;
 
 	rc = smblib_read(chg, APSD_STATUS_REG, &stat);
-
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't read APSD_STATUS rc=%d\n", rc);
 		return IRQ_HANDLED;

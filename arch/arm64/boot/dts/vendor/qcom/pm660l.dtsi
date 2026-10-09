@@ -163,6 +163,10 @@
 			qcom,pmic-revid = <&pm660l_revid>;
 			qcom,auto-calibration;
 			qcom,sync-dly = <800>;
+			
+			/* ФИКС: Явно указываем поддерживаемые физические каналы подсветки
+			 * для ухода от предупреждения WLED sink config=f0 -> b0 */
+			qcom,enabled-strings = <0 1 3>;
 			status = "ok";
 		};
 
@@ -328,8 +332,10 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			qcom,pmic-revid = <&pm660l_revid>;
-			qcom,swire-control;
-			/* Huaqin: Включение AMOLED LAB/IBB питания */
+			
+			/* ФИКС: Переключаем в режим LCD для IPS-экрана */
+			qcom,qpnp-labibb-mode = "lcd";
+
 			status = "okay";
 
 			ibb_regulator: qcom,ibb@dc00 {
@@ -344,9 +350,8 @@
 				qcom,qpnp-ibb-step-size = <100000>;
 				qcom,qpnp-ibb-slew-rate = <2000000>;
 				qcom,qpnp-ibb-init-voltage = <4000000>;
-				qcom,qpnp-ibb-init-amoled-voltage = <4000000>;
 
-				/* Huaqin: Лимит по току до 200мА */
+				/* Лимит по току до 200мА */
 				qcom,qpnp-ibb-limit-maximum-current = <200>;
 				qcom,qpnp-ibb-limit-max-current-enable;
 			};
@@ -363,11 +368,10 @@
 				qcom,qpnp-lab-step-size = <100000>;
 				qcom,qpnp-lab-slew-rate = <5000>;
 				qcom,qpnp-lab-init-voltage = <4600000>;
-				qcom,qpnp-lab-init-amoled-voltage = <4600000>;
 
 				qcom,notify-lab-vreg-ok-sts;
 
-				/* Huaqin: Лимит по току до 200мА */
+				/* Лимит по току до 200мА */
 				qcom,qpnp-lab-limit-maximum-current = <200>;
 				qcom,qpnp-lab-limit-max-current-enable;
 			};

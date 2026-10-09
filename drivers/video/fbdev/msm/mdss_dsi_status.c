@@ -20,9 +20,12 @@
 #include "mdss_dsi.h"
 #include "mdss_panel.h"
 #include "mdss_mdp.h"
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 start */
-#define STATUS_CHECK_INTERVAL_MS 2000
-/* Huaqin modify for ZQL1650 by xieguoqiang at 2018/02/09 end */
+
+#ifdef CONFIG_MACH_ASUS_X00TD
+#define STATUS_CHECK_INTERVAL_MS 500
+#else
+#define STATUS_CHECK_INTERVAL_MS 5000
+#endif
 #define STATUS_CHECK_INTERVAL_MIN_MS 50
 #define DSI_STATUS_CHECK_INIT -1
 #define DSI_STATUS_CHECK_DISABLE 1
@@ -254,9 +257,9 @@ int __init mdss_dsi_status_init(void)
 	if (!pstatus_data)
 		return -ENOMEM;
 
-/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot start*/
+#ifdef CONFIG_MACH_ASUS_SDM660
 	pstatus_data->is_first_check = 1;
-/* Huaqin duchangguo modify for disabling esd check when panel is not connect before boot end*/
+#endif
 	pstatus_data->fb_notifier.notifier_call = fb_event_callback;
 
 	rc = fb_register_client(&pstatus_data->fb_notifier);

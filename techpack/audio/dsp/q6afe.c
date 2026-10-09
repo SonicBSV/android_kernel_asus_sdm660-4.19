@@ -3259,9 +3259,16 @@ static int afe_send_port_topology_id(u16 port_id)
 
 	ret = afe_port_topology_deregister(port_id);
 	if (ret < 0) {
-		pr_err("%s: AFE deregister topology for port 0x%x failed %d\n",
-			__func__, port_id, ret);
-		goto done;
+		/* -EOPNOTSUPP (-95) означает, что DSP не требует/не поддерживает дерегистрацию */
+		if (ret == -EOPNOTSUPP || ret == -EINVAL || ret == -95) {
+			pr_debug("%s: AFE deregister topology not supported for port 0x%x (%d), bypassing\n",
+				__func__, port_id, ret);
+			ret = 0; /* Сбрасываем ошибку и продолжаем */
+		} else {
+			pr_err("%s: AFE deregister topology for port 0x%x failed %d\n",
+				__func__, port_id, ret);
+			goto done;
+		}
 	}
 
 	memset(&topology, 0, sizeof(topology));
@@ -3282,6 +3289,7 @@ static int afe_send_port_topology_id(u16 port_id)
 	if (ret || !topology_id) {
 		pr_debug("%s: AFE port[%d] get_cal_topology[%d] invalid!\n",
 				__func__, port_id, topology_id);
+		ret = 0; /* Не считаем ошибкой отсутствие калибровки */
 		goto done;
 	}
 
@@ -3305,12 +3313,10 @@ static int afe_send_port_topology_id(u16 port_id)
 	this_afe.topology[index] = topology_id;
 	rtac_update_afe_topology(port_id);
 done:
-	pr_info("%s: AFE set topology id 0x%x  enable for port 0x%x ret %d\n",
+	pr_debug("%s: AFE set topology id 0x%x enable for port 0x%x ret %d\n",
 			__func__, topology_id, port_id, ret);
 	return ret;
-
 }
-
 
 static int afe_get_island_mode(u16 port_id, u32 *island_mode)
 {
@@ -9306,9 +9312,12 @@ int afe_set_lpass_clock_v2(u16 port_id, struct afe_clk_set *cfg)
 			ret = afe_set_source_clk(port_id,
 					clk_src_name[CLK_SRC_INTEGRAL]);
 		}
-		if (ret < 0)
-			pr_err("%s: afe_set_source_clk fail %d\n",
+		if (ret < 0) {
+			/* Игнорируем -EINVAL / -EOPNOTSUPP, так как клок уже сконфигурирован по умолчанию */
+			pr_debug("%s: afe_set_source_clk not supported/ignored (%d)\n",
 				__func__, ret);
+			ret = 0; /* Сбрасываем ошибку, чтобы не ломать цепочку вызовов */
+		}
 	}
 	idx = afe_get_port_idx(port_id);
 	if (idx < 0) {

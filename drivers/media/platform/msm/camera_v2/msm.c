@@ -230,23 +230,34 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 static inline void msm_pm_qos_add_request(void)
 {
 	pr_info("%s: add request\n", __func__);
-	if (atomic_cmpxchg(&qos_add_request_done, 0, 1))
-		return;
-	pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
-	PM_QOS_DEFAULT_VALUE);
+	/* atomic_cmpxchg возвращает старое значение. 
+	 * Если старое значение было 0, то мы успешно записали 1 и должны добавить запрос */
+	if (atomic_cmpxchg(&qos_add_request_done, 0, 1) == 0) {
+		pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
+		PM_QOS_DEFAULT_VALUE);
+	}
 }
 
 static void msm_pm_qos_remove_request(void)
 {
 	pr_info("%s: remove request\n", __func__);
-	pm_qos_remove_request(&msm_v4l2_pm_qos_request);
+	/* Сбрасываем флаг в 0 и проверяем, был ли запрос действительно активен */
+	if (atomic_xchg(&qos_add_request_done, 0) == 1) {
+		if (pm_qos_request_active(&msm_v4l2_pm_qos_request)) {
+			pm_qos_remove_request(&msm_v4l2_pm_qos_request);
+		}
+	}
 }
 
 void msm_pm_qos_update_request(int val)
 {
 	pr_info("%s: update request %d\n", __func__, val);
 	msm_pm_qos_add_request();
-	pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
+	if (pm_qos_request_active(&msm_v4l2_pm_qos_request)) {
+		pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
+	} else {
+		pr_warn("%s: PM QoS request is not active, skipping update\n", __func__);
+	}
 }
 
 struct msm_session *msm_session_find(unsigned int session_id)

@@ -976,16 +976,14 @@ struct fuse_removemapping_one {
 
 /** One input argument of a request */
 struct fuse_bpf_in_arg {
-	uint32_t size;
 	const void *value;
-	const void *end_offset;
+	uint32_t size;
 };
 
 /** One output argument of a request */
 struct fuse_bpf_arg {
-	uint32_t size;
 	void *value;
-	void *end_offset;
+	uint32_t size;
 };
 
 #define FUSE_MAX_IN_ARGS 5

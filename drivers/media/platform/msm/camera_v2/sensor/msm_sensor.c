@@ -308,70 +308,57 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	}else{
 		id_match = 1;
 	}
-	if(0 == strcmp(sensor_name, "ov8856_chicony_front") && 1 == id_match && 0 == ov8856_read_mask ){
 
+	/* Детекция ревизий OV8856 */
+	if (0 == strcmp(sensor_name, "ov8856_chicony_front") && 1 == id_match && 0 == ov8856_read_mask) {
 		pr_err("ov8856-1b time stamp");
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x0100, 0x01, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x5001, 0x02, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d84, 0xc0, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d88, 0x70, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d89, 0x0f, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d8a, 0x70, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d8b, 0x0f, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x3d81, 0x01, MSM_CAMERA_I2C_BYTE_DATA);
 
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x0100,
-			0x01, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x5001,
-			0x02, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d84,
-			0xc0, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d88,
-			0x70, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d89,
-			0x0f, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d8a,
-			0x70, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d8b,
-			0x0f, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x3d81,
-			0x01, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(sensor_i2c_client, 0x700f, &ov8856_mask, MSM_CAMERA_I2C_BYTE_DATA);
+		pr_err("ov8856 mask read from 0x700f is 0x%x, 0x02 is 1b", ov8856_mask);
 
-		//msleep(20);
-
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
-			sensor_i2c_client, 0x700f,
-			&ov8856_mask, MSM_CAMERA_I2C_BYTE_DATA);
-
-		pr_err("ov8856 mask read from 0x700f is 0x%x,0x02 is 1b, other is 1a", ov8856_mask);
-
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x5001,
-			0x0a, MSM_CAMERA_I2C_BYTE_DATA);
-		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
-			sensor_i2c_client, 0x0100,
-			0x00, MSM_CAMERA_I2C_BYTE_DATA);
-
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x5001, 0x0a, MSM_CAMERA_I2C_BYTE_DATA);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(sensor_i2c_client, 0x0100, 0x00, MSM_CAMERA_I2C_BYTE_DATA);
 		ov8856_read_mask = 1;
-
-		pr_err("ov8856-1b time stamp end");
-
 	}
 
-	if(0 == strcmp(sensor_name, "ov8856_chicony_front") && 0x02 == ov8856_mask){
+	if (0 == strcmp(sensor_name, "ov8856_chicony_front") && 0x02 == ov8856_mask) {
 		pr_err("Front camera is ov8856-1b Configuration");
 		return -ENODEV;
 #endif
 	}
 #ifdef CONFIG_MACH_ASUS_X00TD
-	if(0 == strcmp(sensor_name, "gc5025_ofilm_13m") && gpio_get_value(SUB_CAM_ID_PIN)){
-		pr_err("Sub camera is 16+5M ofilm Configuration");
-		return -ENODEV;
-	}
 
-	if(0 == strcmp(sensor_name, "hi556_holitech_13m") && gpio_get_value(SUB_CAM_ID_PIN)){
-		pr_err("Sub camera is 16+5M holitech Configuration");
-		return -ENODEV;
+	/* ДИНАМИЧЕСКИЙ ОПРОС СВЯЗКИ GC5025 (13M) И HI556 (16M) С ЗАЩИТОЙ */
+	if (0 == strcmp(sensor_name, "gc5025_ofilm_13m") || 0 == strcmp(sensor_name, "hi556_holitech_13m")) {
+		int pin_val = 0;
+		int gpio_rc = gpio_request(SUB_CAM_ID_PIN, "sub_cam_id");
+		
+		if (gpio_rc == 0) {
+			gpio_direction_input(SUB_CAM_ID_PIN);
+			pin_val = gpio_get_value(SUB_CAM_ID_PIN);
+			gpio_free(SUB_CAM_ID_PIN); /* Сразу освобождаем пин во избежание паники */
+			pr_err("Dynamic match info: SUB_CAM_ID_PIN read status = %d\n", pin_val);
+		} else {
+			pr_err("Dynamic match info: Failed to request SUB_CAM_ID_PIN: %d. Falling back to LOW (0)\n", gpio_rc);
+		}
+
+		if (0 == strcmp(sensor_name, "gc5025_ofilm_13m") && pin_val) {
+			pr_err("Dynamic reject: sensor is GC5025 but board hardware is 16+5M (pin high)\n");
+			return -ENODEV;
+		}
+
+		if (0 == strcmp(sensor_name, "hi556_holitech_13m") && !pin_val) {
+			pr_err("Dynamic reject: sensor is HI556 but board hardware is 13M (pin low)\n");
+			return -ENODEV;
+		}
 	}
 #endif
 	return rc;

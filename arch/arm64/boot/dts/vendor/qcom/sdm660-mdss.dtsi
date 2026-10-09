@@ -41,7 +41,7 @@
 		qcom,vbif-settings = <0x00ac 0x00008040>,
 				     <0x00d0 0x00002828>;
 
-		qcom,mdss-cx-ipeak = <&cx_ipeak_lm 3>;
+		/* ФИКС: Удален qcom,mdss-cx-ipeak для устранения ошибки cxipeak api fail ret:-22 */
 		qcom,mdss-has-panic-ctrl;
 		qcom,mdss-per-pipe-panic-luts = <0x000f>,
 						<0xffff>,
@@ -105,6 +105,8 @@
 		qcom,mdss-highest-bank-bit = <0x1>;
 		qcom,mdss-has-decimation;
 		qcom,mdss-idle-power-collapse-enabled;
+
+		/* ФИКС: Сбалансированный список 8 клоков под 8 имен clock-names */
 		clocks = <&clock_mmss MMSS_MNOC_AHB_CLK>,
 			 <&clock_mmss MMSS_MDSS_AHB_CLK>,
 			 <&clock_mmss MMSS_MDSS_AXI_CLK>,
@@ -270,6 +272,7 @@
 			cell-index = <2>;
 			compatible = "qcom,mdss-fb";
 			qcom,mdss-intf = <&mdss_dp_ctrl>;
+			status = "disabled";
 		};
 
 	};
@@ -475,7 +478,7 @@
 	};
 
 	mdss_dp_ctrl: qcom,dp_ctrl@c990000 {
-		status = "ok";
+		status = "disabled";
 		cell-index = <0>;
 		compatible = "qcom,mdss-dp";
 		qcom,mdss-fb-map = <&mdss_fb2>;
@@ -613,7 +616,6 @@
 		interrupts = <2 0>;
 
 		qcom,mdss-rot-parent = <&mdss_mdp 0>;
-		/* VBIF QoS remapper settings*/
 		qcom,mdss-rot-vbif-qos-setting = <1 1 1 1>;
 		qcom,mdss-rot-xin-id = <14 15>;
 

@@ -61,11 +61,24 @@
 			15 01 00 00 00 00 02 E9 C4
 			15 01 00 00 00 00 02 CF C0
 			15 01 00 00 00 00 02 E9 3F
+			/* Brightness MSB+LSB = 0x0FFF (4095) — максимум 12-бит.
+			 * HX83112A поддерживает 12-бит PWM через регистры 51/52.
+			 * При использовании bl_ctrl_wled значения 51/52 задают
+			 * начальный уровень; реальное управление идёт через WLED. */
 			39 01 00 00 00 00 03 51 0F FF
+			/* BL on (0x2C) + CABC off (бит[1:0]=00).
+			 * 0x2C = 0b00101100: BL_CTR=1, DD=1, остальное=0.
+			 * Если нужен CABC UI — поменять на 0x2D (бит0=1). */
 			15 01 00 00 00 00 02 53 2C
+			/* CABC OFF явно: 0x00 = off.
+			 * Предотвращает конфликт авто-яркости панели с WLED. */
+			15 01 00 00 00 00 02 55 00
 			05 01 00 00 50 00 01 11
 			15 01 00 00 00 00 02 35 00
+			/* Переинициализация MIPI после Sleep Out:
+			 * 0x73 0x23 = 4-lane, HS, ECC+CRC on */
 			39 01 00 00 00 00 03 BA 73 23
+			/* Закрыть расширенный регистровый доступ HX83112A */
 			39 01 00 00 00 00 04 B9 00 00 00
 			05 01 00 00 14 00 01 29];
 		qcom,mdss-dsi-off-command = [05 01 00 00 32 00 02 28 00
@@ -83,6 +96,18 @@
 		qcom,mdss-dsi-lane-1-state;
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
+
+		/* Держать clock lane в HS постоянно.
+		 * HX83112A (IPS TM) мерцает при возврате из LP
+		 * между пакетами на 60 Hz видео-режиме. */
+		qcom,mdss-dsi-force-clock-lane-hs;
+
+		/* Запрет ULPS.
+		 * HX83112A на SDM636: выход из ULPS под нагрузкой
+		 * даёт просадку питания → кратковременное гашение
+		 * при максимальной яркости. */
+		qcom,ulps-enabled = <0>;
+
 		qcom,mdss-dsi-panel-timings-phy-v2 = [26 21 09 0B 06 03 04 a0
 		26 21 09 0B 06 03 04 a0
 		26 21 09 0B 06 03 04 a0
@@ -90,15 +115,34 @@
 		26 20 0A 0B 06 03 04 a0];
 		qcom,mdss-dsi-t-clk-post = <0x0F>;
 		qcom,mdss-dsi-t-clk-pre = <0x37>;
-		qcom,mdss-dsi-bl-min-level = <1>;
+
+		/* min=12: уменьшает бросок тока WLED при старте подсветки.
+		 * max=4095: 12-бит PWM для линейного ползунка в Android 11. */
+		qcom,mdss-dsi-bl-min-level = <12>;
 		qcom,mdss-dsi-bl-max-level = <4095>;
+
 		qcom,mdss-dsi-dma-trigger = "trigger_sw";
 		qcom,mdss-dsi-mdp-trigger = "none";
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
-		qcom,mdss-dsi-reset-sequence = <1 10>, <0 10>, <1 20>;
+
+		/* Сброс с увеличенной паузой выхода (50ms вместо 20ms).
+		 * HX83112A требует время для стабилизации LDO после RST↑
+		 * до приёма первой MIPI-команды. */
+		qcom,mdss-dsi-reset-sequence = <1 20>, <0 20>, <1 50>;
+
+		/* LP11 перед init: HX83112A не отвечает на команды
+		 * без предварительного LP11 на clock lane. */
 		qcom,mdss-dsi-lp11-init;
+
+		/* 30ms: HX83112A (TM) медленнее NT36672 выходит из reset,
+		 * особенно при холодном старте. Оригинальное значение сохранено. */
 		qcom,mdss-dsi-init-delay-us = <30000>;
+
+		/* ESD оставлен включённым с оригинальными параметрами.
+		 * HX83112A отдаёт корректный статус 0x80/0x73/0x06 по reg 0x09.
+		 * Если появятся ложные перезапуски — закомментировать строку ниже. */
 		qcom,esd-check-enabled;
+
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 01 09];
 		qcom,mdss-dsi-panel-status-command-mode = "dsi_hs_mode";
 		qcom,mdss-dsi-panel-status-check-mode = "reg_read";

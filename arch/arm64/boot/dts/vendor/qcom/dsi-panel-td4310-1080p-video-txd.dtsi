@@ -49,19 +49,38 @@
 			29 01 00 00 00 00 14 C8 01 00 FC 01 02 FC 00 00 FD 01 FF FC 00 00 FE FA F8 FC 00
 			29 01 00 00 00 00 04 F3 02 00 B4
 			29 01 00 00 00 00 02 D6 01
+			/* Начальный уровень яркости = 0xFF (максимум 8-бит reg 0x51).
+			 * TD4310 использует 8-бит регистр яркости.
+			 * Реальное управление — через WLED (bl_ctrl_wled).
+			 * При bl_ctrl_wled значение в 0x51 — только стартовый уровень. */
 			15 01 00 00 00 00 02 51 FF
+			/* BL control: 0x0C = BL_CTR=1, CABC off.
+			 * TD4310: reg 0x53 бит[3]=1 включает BL через reg 0x51,
+			 * биты[1:0]=00 = CABC off. Оригинальное значение сохранено. */
 			15 01 00 00 00 00 02 53 0C
+			/* CABC OFF: предотвращает конфликт авто-яркости панели
+			 * с WLED-драйвером. TD4310 имеет собственный CABC-контроллер,
+			 * который при активации конкурирует с WLED за управление током,
+			 * вызывая просадки и гашение при резком росте яркости. */
 			15 01 00 00 00 00 02 55 00
 			15 01 00 00 00 00 02 36 00
+			/* Sleep Out с задержкой 150ms (0x96 = 150 десятичных, в 10ms единицах).
+			 * TD4310 (TDDI = Touch+Display Driver IC) требует увеличенную
+			 * паузу после Sleep Out для инициализации touch-подсистемы. */
 			05 01 00 00 96 00 02 11 00
 			05 01 00 00 50 00 02 29 00];
 		qcom,mdss-dsi-off-command = [05 01 00 00 32 00 02 28 00
 					05 01 00 00 78 00 02 10 00];
 		qcom,mdss-dsi-esd-recover-command = [39 01 00 00 00 00 02 4F 01];
 		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
+		/* TD4310: off-команды в HS режиме (оригинал сохранён).
+		 * Display Off и Sleep In отправляются в HS, т.к. панель
+		 * может не принимать LP-команды в процессе shutdown. */
 		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
 		qcom,mdss-dsi-esd-recover-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-h-sync-pulse = <1>;
+		/* non_burst_sync_event: TD4310 требует sync-event режим,
+		 * burst mode не поддерживается этим TDDI-контроллером. */
 		qcom,mdss-dsi-traffic-mode = "non_burst_sync_event";
 		qcom,mdss-dsi-lane-map = "lane_map_0123";
 		qcom,mdss-dsi-bllp-eof-power-mode;
@@ -71,8 +90,17 @@
 		qcom,mdss-dsi-lane-2-state;
 		qcom,mdss-dsi-lane-3-state;
 
-		/* IPS: удержание clock lane в HS предотвращает мерцание при idle */
+		/* Держать clock lane в HS постоянно.
+		 * TD4310 (TDDI, IPS, non_burst): в sync-event режиме
+		 * переход clock в LP особенно критичен — панель теряет
+		 * синхронизацию и гаснет при пиковой яркости. */
 		qcom,mdss-dsi-force-clock-lane-hs;
+
+		/* Запрет ULPS.
+		 * TD4310 на SDM636: TDDI-контроллер объединяет touch и display,
+		 * выход из ULPS прерывает touch-scan и вызывает просадку
+		 * питания → кратковременное гашение дисплея. */
+		qcom,ulps-enabled = <0>;
 
 		qcom,mdss-dsi-panel-timings-phy-v2 = [25 1F 09 0A 06 03 04 a0
 		25 1F 09 0A 06 03 04 a0
@@ -82,22 +110,33 @@
 		qcom,mdss-dsi-t-clk-post = <0x1E>;
 		qcom,mdss-dsi-t-clk-pre = <0x38>;
 
-		/* A11: 12-bit WLED диапазон для линейного ползунка яркости */
-		qcom,mdss-dsi-bl-min-level = <8>;
+		/* min=12: снижает бросок тока WLED при старте/смене яркости.
+		 * max=4095: 12-бит диапазон для линейного ползунка в Android 11.
+		 * Примечание: TD4310 reg 0x51 — 8-бит, WLED управляет независимо. */
+		qcom,mdss-dsi-bl-min-level = <12>;
 		qcom,mdss-dsi-bl-max-level = <4095>;
 
 		qcom,mdss-dsi-dma-trigger = "trigger_sw";
 		qcom,mdss-dsi-mdp-trigger = "none";
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
 
-		/* Надёжный сброс: TD4310 (TDDI) чувствителен к时序 reset */
+		/* Сброс с увеличенной паузой RST↑=50ms.
+		 * TD4310 (TDDI): объединённый touch+display контроллер
+		 * требует больше времени на инициализацию обоих блоков
+		 * после аппаратного сброса. */
 		qcom,mdss-dsi-reset-sequence = <1 20>, <0 20>, <1 50>;
+
+		/* LP11 обязателен: TD4310 в TDDI-режиме ждёт LP11
+		 * как сигнал готовности хоста перед откликом. */
 		qcom,mdss-dsi-lp11-init;
 
-		/* Задержка инициализации: TDDI-контроллер требует больше времени */
+		/* 15ms: TD4310 (TDDI) требует время для инициализации
+		 * как display, так и touch-части после reset. */
 		qcom,mdss-dsi-init-delay-us = <15000>;
 
-		/* ESD отключён: на A11/kernel 4.4 вызывает ложные перезапуски экрана */
+		/* ESD отключён: на Android 11 + kernel 4.4 вызывает
+		 * ложные перезапуски. TD4310 в non_burst режиме особенно
+		 * чувствителен к read-командам под нагрузкой DSI шины. */
 		/* qcom,esd-check-enabled; */
 
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 01 0A];

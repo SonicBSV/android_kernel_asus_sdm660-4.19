@@ -83,7 +83,7 @@
 
 &dsi_dual_nt36850_truly_cmd {
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_wled";
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
 	qcom,mdss-dsi-force-clock-lane-hs;
@@ -93,7 +93,7 @@
 /* Huaqin modify for ZQL1650-140 by xieguoqiang at 2018/01/23 start */
 &dsi_nt36672_1080p_video_txd {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,mdss-dsi-force-clock-lane-hs;
 	/delete-property/ qcom,esd-check-enabled;
@@ -103,7 +103,7 @@
 /* Huaqin modify for lcm bring up by xieguoqiang at 2018/02/26 start */
 &dsi_nt36672_1080p_video {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,mdss-dsi-force-clock-lane-hs;
 	/delete-property/ qcom,esd-check-enabled;
@@ -113,7 +113,7 @@
 /* Huaqin modify for ZQL1650-1356 by qimaokang at 2018/05/22 start */
 &dsi_td4310_1080p_video_txd {
 	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
-	qcom,mdss-dsi-bl-min-level = <8>;
+	qcom,mdss-dsi-bl-min-level = <12>;
 	qcom,mdss-dsi-bl-max-level = <4095>;
 	qcom,mdss-dsi-force-clock-lane-hs;
 	/delete-property/ qcom,esd-check-enabled;
@@ -289,7 +289,6 @@
 /* СТАБИЛИЗАЦИЯ И ОПТИМИЗАЦИЯ ASUS X00TD (SDM636) ДЛЯ ANDROID 13 */
 /* ========================================================================= */
 
-/* 1. Безопасное отключение фантомной камеры Iris (предотвращает перезагрузки Watchdog) */
 &cci {
 	qcom,eeprom@3 {
 		status = "disabled";
@@ -300,7 +299,6 @@
 	};
 };
 
-/* 2. Настройка строк WLED под IPS-дисплей Asus (убирает ошибку калибровки WLED в dmesg) */
 &pm660l_wled {
 	qcom,led-strings-list = [00 01];
 	qcom,enabled-strings = [00 01];
@@ -308,11 +306,41 @@
 	status = "ok";
 };
 
-/* 3. Переопределение ERM-вибрации на PM660L (убирает жор батареи и SPMI-дедлоки) */
 &pm660_haptics {
-	compatible = "qcom,pm660-haptics";
-	qcom,actuator-type = "erm";
-	qcom,vmax-mv = <3000>;
-	qcom,play-rate-us = <5715>;
-	status = "okay";
+    compatible = "qcom,qpnp-haptics";
+    reg = <0xc000 0x100>;
+    interrupts = <0x1 0xc0 0x0 IRQ_TYPE_EDGE_BOTH>,
+                 <0x1 0xc0 0x1 IRQ_TYPE_EDGE_BOTH>;
+    interrupt-names = "hap-sc-irq", "hap-play-irq";
+    qcom,pmic-revid = <&pm660_revid>;
+
+    qcom,actuator-type = <1>;       /* 1 = ERM */
+    qcom,play-mode = "direct";
+    qcom,vmax-mv = <3596>;
+    qcom,ilim-ma = <800>;
+    qcom,sc-dbc-cycles = <8>;
+    qcom,wave-play-rate-us = <6667>;
+    qcom,en-brake;
+
+    status = "okay";
+};
+
+&sdhc_2 {
+	/delete-property/ interrupt-map;
+	
+	/* ИСПРАВЛЕНО: Ровно по 3 ячейки для GIC (&intc 0 <irq> <trigger>) */
+	interrupt-map = <0 &intc 0 125 4>,
+			<1 &intc 0 221 4>,
+			<2 &tlmm 54 3>;
+
+	/* cd-gpios тип EDGE_BOTH (0x3) для детекции карты */
+	cd-gpios = <&tlmm 54 0x3>;
+};
+
+&mdss_dp_ctrl {
+	status = "disabled";
+};
+
+&mdss_dp_pll {
+	status = "disabled";
 };

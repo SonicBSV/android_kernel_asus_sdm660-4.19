@@ -39,6 +39,12 @@
 				qcom,pon-type = <0>;
 				qcom,pull-up = <1>;
 				linux,code = <116>;
+			/* Huaqin add for ZQL1650-14 by lanshiming at 2018/1/17 start*/
+				qcom,support-reset = <1>;
+				qcom,s1-timer = <10256>;
+				qcom,s2-timer = <10>;
+				qcom,s2-type = <4>;
+			/* Huaqin add for ZQL1650-14 by lanshiming at 2018/1/17 end*/
 			};
 
 			qcom,pon_2 {
@@ -202,10 +208,27 @@
 			qcom,wipower-max-uw = <5000000>;
 			dpdm-supply = <&qusb_phy0>;
 
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 start */
 			qcom,thermal-mitigation
 					= <3000000 2500000 2000000 1500000
 						1000000 500000>;
-
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 end */
+			// Added by huqinmin remove Type-C for micro-usb 2018/1/31 begin
+			qcom,use-extcon;
+			// Added by huqinmin remove Type-C for micro-usb 2018/1/31 end
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/2 start */
+/* Huaqin modify for ZQL1650-70 optimize Adapter ID by fangaijun at 2018/02/9 start */
+			qcom,fcc-max-ua = <2000000>;
+/* Huaqin modify for ZQL1650-70 optimize Adapter ID by fangaijun at 2018/02/9 end */
+			qcom,fv-max-uv = <4350000>;
+/* Huaqin modify for ZQL1650-70 optimize Adapter ID by fangaijun at 2018/02/9 start */
+			qcom,usb-icl-ua = <2000000>;
+/* Huaqin modify for ZQL1650-70 optimize Adapter ID by fangaijun at 2018/02/9 end */
+			qcom,float-option = <1>;
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/2 end */
+/* Huaqin modify for ZQL1650 recharge SOC and voltage by fangaijun at 2018/02/2 start */
+			qcom,auto-recharge-soc;
+/* Huaqin modify for ZQL1650 recharge SOC and voltage by fangaijun at 2018/02/2 end */
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
 				interrupts =
@@ -320,6 +343,11 @@
 
 		pm660_pdphy: qcom,usb-pdphy@1700 {
 			compatible = "qcom,qpnp-pdphy";
+			// Added by huqinmin remove Type-C for micro-usb 2018/1/31 begin
+			/* Huaqin modify for ZQL1820-HQ000003 Optimize power consumption by diabling TYPE-C by gaochao at 2018/09/17 start */
+			status = "disabled";
+			/* Huaqin modify for ZQL1820-HQ000003 Optimize power consumption by diabling TYPE-C by gaochao at 2018/09/17 end */
+			// Added by huqinmin remove Type-C for micro-usb 2018/1/31 end
 			reg = <0x1700 0x100>;
 			vdd-pdphy-supply = <&pm660l_l7>;
 			vbus-supply = <&smb2_vbus>;
@@ -377,9 +405,51 @@
 					   "rradc_die_temp";
 			qcom,rradc-base = <0x4500>;
 			qcom,fg-esr-timer-awake = <96 96>;
-			qcom,fg-esr-timer-asleep = <256 256>;
+/* Huaqin modify for ZQL1650-1244 A periodic pulse of 14s occurs when the phone idel by fangaijun  at 2018/05/14 start */
+			qcom,fg-esr-timer-asleep = <160 256>;
+/* Huaqin modify for ZQL1650-1244 A periodic pulse of 14s occurs when the phone idel by fangaijun  at 2018/05/14 end */
 			qcom,fg-esr-timer-charging = <0 96>;
 			qcom,cycle-counter-en;
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/1 start */
+			qcom,fg-cutoff-voltage = <3400>;
+			qcom,fg-empty-voltage = <2800>;
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/1 end */
+
+/* Huaqin modify for ZQL1650 remove cc-cv voltage by fangaijun  at 2018/03/22 start */
+			//qcom,fg-cc-cv-threshold-mv = <4340>;
+/* Huaqin modify for ZQL1650 remove cc-cv voltage by fangaijun  at 2018/03/22 end */
+/* Huaqin modify for ZQL1650-586 optimize low temperature discharging soc deviation by fangaijun  at 2018/03/22 start */
+/* Huaqin modify for ZQL1650-1096 optimize normal temperature charging soc deviation by fangaijun  at 2018/04/27 start */
+			qcom,fg-esr-tight-filter-micro-pct = <20000>;
+			qcom,fg-esr-broad-filter-micro-pct = <25000>;
+/* Huaqin modify for ZQL1650-1096 optimize normal temperature charging soc deviation by fangaijun  at 2018/04/27 end */
+			qcom,fg-esr-tight-lt-filter-micro-pct = <2000>;
+			qcom,fg-esr-broad-lt-filter-micro-pct = <2200>;
+			qcom,slope-limit-temp-threshold = <150>;
+			qcom,slope-limit-coeffs = <1 1 1 1>;
+/* Huaqin modify for ZQL1650-586 optimize low temperature discharging soc deviation by fangaijun  at 2018/03/22 end */
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/2 start */
+			qcom,fg-chg-term-current = <150>;
+			qcom,fg-sys-term-current = <(-200)>;
+			qcom,hold-soc-while-full;
+			qcom,linearize-soc;
+			qcom,fg-force-load-profile;
+/* Huaqin modify for ZQL1650 Realize HW Jeita by fangaijun  at 2018/02/6 start */
+			/* Huaqin modify for ZQL1820-HQ000002  Adjust JEITA according to customer require by gaochao at 2018/10/11 start */
+			//qcom,fg-jeita-thresholds = <0 1 59 60>;
+			qcom,fg-jeita-thresholds = <0 1 54 55>;
+			/* Huaqin modify for ZQL1820-HQ000002  Adjust JEITA according to customer require by gaochao at 2018/10/11 end */
+			qcom,fg-jeita-hyst-temp = <3>;
+/* Huaqin modify for ZQL1650 Realize HW Jeita by fangaijun  at 2018/02/6 end */
+/* Huaqin modify for ZQL1650 by fangaijun  at 2018/02/2 end */
+/* Huaqin modify for ZQL1650 recharge SOC and voltage by fangaijun at 2018/02/2 start */
+			qcom,fg-recharge-voltage = <4150>;
+			qcom,fg-recharge-soc-thr = <98>;
+			qcom,fg-auto-recharge-soc;
+/* Huaqin modify for ZQL1650 recharge SOC and voltage by fangaijun at 2018/02/2 end */
+//Huaqin added by tangqingyong at 20180226 for fg use external start
+			qcom,fg-rsense-sel=<1>;
+//Huaqin added by tangqingyong at 20180226 for fg use external end
 			status = "okay";
 
 			qcom,fg-batt-soc@4000 {

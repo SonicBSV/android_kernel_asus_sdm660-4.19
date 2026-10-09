@@ -100,9 +100,10 @@ static struct mdss_panel_intf pan_types[] = {
 	{"hdmi", MDSS_PANEL_INTF_HDMI},
 	{"rgb", MDSS_PANEL_INTF_RGB},
 };
-/* Huaqin modify for Modification sequence by qimaokang at 2018/05/31 start */
+#ifndef CONFIG_MACH_ASUS_SDM660
+static
+#endif
 char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
-/* Huaqin modify for Modification sequence by qimaokang at 2018/05/31 end */
 
 struct mdss_hw mdss_mdp_hw = {
 	.hw_ndx = MDSS_HW_MDP,
@@ -2236,6 +2237,8 @@ static void mdss_mdp_hw_rev_caps_init(struct mdss_data_type *mdata)
 	case MDSS_MDP_HW_REV_320:
 		mdss_set_quirk(mdata, MDSS_QUIRK_DSC_RIGHT_ONLY_PU);
 		mdss_set_quirk(mdata, MDSS_QUIRK_DSC_2SLICE_PU_THRPUT);
+		//enable HDR for SDM660
+		mdss_set_quirk(mdata, MDSS_QUIRK_HDR_SUPPORT_ENABLED);
 	case MDSS_MDP_HW_REV_330:
 		mdata->max_target_zorder = 7; /* excluding base layer */
 		mdata->max_cursor_size = 512;
@@ -5587,9 +5590,11 @@ static int __init mdss_mdp_driver_init(void)
 	return 0;
 
 }
-/* Huaqin modify for Modification sequence by qimaokang at 2018/05/31 start */
+
+#ifdef CONFIG_MACH_ASUS_SDM660
 EXPORT_SYMBOL(mdss_mdp_panel);
-/* Huaqin modify for Modification sequence by qimaokang at 2018/05/31 end */
+#endif
+
 module_param_string(panel, mdss_mdp_panel, MDSS_MAX_PANEL_LEN, 0600);
 /*
  * panel=<lk_cfg>:<pan_intf>:<pan_intf_cfg>:<panel_topology_cfg>

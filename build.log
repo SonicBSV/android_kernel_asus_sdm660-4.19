@@ -1,0 +1,24 @@
+make -f ./Makefile syncconfig
+make -f ./scripts/Makefile.build obj=scripts/basic
+  gcc -Wp,-MD,scripts/basic/.fixdep.d -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89         -o scripts/basic/fixdep scripts/basic/fixdep.c   
+rm -f .tmp_quiet_recordmcount
+make -f ./scripts/Makefile.build obj=scripts/kconfig syncconfig
+  gcc -Wp,-MD,scripts/kconfig/.conf.o.d -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89       -c -o scripts/kconfig/conf.o scripts/kconfig/conf.c
+  bison -oscripts/kconfig/zconf.tab.c -t -l scripts/kconfig/zconf.y
+  flex -oscripts/kconfig/zconf.lex.c -L scripts/kconfig/zconf.l
+  gcc -Wp,-MD,scripts/kconfig/.zconf.tab.o.d -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89      -I ./scripts/kconfig -c -o scripts/kconfig/zconf.tab.o scripts/kconfig/zconf.tab.c
+  gcc   -o scripts/kconfig/conf scripts/kconfig/conf.o scripts/kconfig/zconf.tab.o   
+scripts/kconfig/conf  --syncconfig Kconfig
+***
+*** Configuration file ".config" not found!
+***
+*** Please run some configurator (e.g. "make oldconfig" or
+*** "make menuconfig" or "make xconfig").
+***
+make[2]: *** [scripts/kconfig/Makefile:69: syncconfig] Error 1
+make[1]: *** [Makefile:582: syncconfig] Error 2
+Makefile:679: include/config/auto.conf.cmd: No such file or directory
+make: *** [Makefile:691: include/config/auto.conf.cmd] Error 2
+
+[0;31m#### failed to build some targets (3 seconds) ####[00m
+

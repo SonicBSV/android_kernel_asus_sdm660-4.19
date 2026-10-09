@@ -279,11 +279,11 @@ struct msm_fb_data_type {
 	u32 idle_state;
 	struct msm_fb_fps_info fps_info;
 	struct delayed_work idle_notify_work;
-/* Huaqin modify for TT1244651 by puqirui at 2018/10/11 start */
+
+#ifdef CONFIG_MACH_ASUS_SDM660
 	struct delayed_work early_unblank_work;
 	bool early_unblank_work_queued;
-/* Huaqin modify for TT1244651 by puqirui at 2018/10/11 end */
-
+#endif
 	bool atomic_commit_pending;
 
 	int op_enable;

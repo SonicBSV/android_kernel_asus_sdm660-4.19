@@ -709,9 +709,7 @@
 			"DMIC4", "MIC BIAS4",
 			"MIC BIAS4", "Digital Mic4",
 			"DMIC5", "MIC BIAS4",
-			"MIC BIAS4", "Digital Mic5",
-			"SpkrLeft IN", "SPK1 OUT",
-			"SpkrRight IN", "SPK2 OUT";
+			"MIC BIAS4", "Digital Mic5";
 		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <1>;
 		qcom,us-euro-gpios = <&us_euro_gpio>;
@@ -790,6 +788,7 @@
 
 	us_euro_gpio: msm_cdc_pinctrl@75 {
 		compatible = "qcom,msm-cdc-pinctrl";
+		#gpio-cells = <2>;
 		pinctrl-names = "aud_active", "aud_sleep";
 		pinctrl-0 = <&wcd_gnd_mic_swap_active>;
 		pinctrl-1 = <&wcd_gnd_mic_swap_idle>;
