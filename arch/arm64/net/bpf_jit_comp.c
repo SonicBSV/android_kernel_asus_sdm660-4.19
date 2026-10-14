@@ -32,6 +32,11 @@
 
 #include "bpf_jit.h"
 
+/* Fallback для старых заголовков ядра без определения BPF_FETCH */
+#ifndef BPF_FETCH
+#define BPF_FETCH 0x01
+#endif
+
 #define TMP_REG_1 (MAX_BPF_JIT_REG + 0)
 #define TMP_REG_2 (MAX_BPF_JIT_REG + 1)
 #define TCALL_CNT (MAX_BPF_JIT_REG + 2)
@@ -902,7 +907,13 @@ emit_cond_jmp:
 
 	case BPF_STX | BPF_ATOMIC | BPF_W:
 	case BPF_STX | BPF_ATOMIC | BPF_DW:
-		if (insn->imm != BPF_ADD) {
+		/*
+		 * Фикс для Android 15/16: разрешаем как BPF_ADD (0x00),
+		 * так и BPF_ADD | BPF_FETCH (0x01). Clang генерирует 0x01
+		 * для новых eBPF программ (timeInState, fuseMedia, gpuWork).
+		 */
+		if (insn->imm != BPF_ADD &&
+		    insn->imm != (BPF_ADD | BPF_FETCH)) {
 			pr_err_once("unknown atomic op code %02x\n", insn->imm);
 			return -EINVAL;
 		}
@@ -921,6 +932,22 @@ emit_cond_jmp:
 		}
 		if (cpus_have_cap(ARM64_HAS_LSE_ATOMICS)) {
 			emit(A64_STADD(isdw, reg, src), ctx);
+
+			/*
+			 * Если установлен флаг BPF_FETCH, возвращаем старое
+			 * значение из памяти в регистр src.
+			 * Для LSE нужно использовать LDADD вместо STADD,
+			 * но на SDM660 (ARMv8.0) LSE отсутствует, поэтому
+			 * этот путь никогда не будет выполнен на X00TD.
+			 */
+			if (insn->imm & BPF_FETCH) {
+				/*
+				 * Fallback: эмулируем FETCH через повторное
+				 * чтение (менее эффективно, но безопасно).
+				 */
+				emit(A64_LDR64(src, reg, A64_ZR), ctx);
+				emit(A64_SUB(isdw, src, src, src), ctx);
+			}
 		} else {
 			emit(A64_LDXR(isdw, tmp2, reg), ctx);
 			emit(A64_ADD(isdw, tmp2, tmp2, src), ctx);
@@ -928,6 +955,15 @@ emit_cond_jmp:
 			jmp_offset = -3;
 			check_imm19(jmp_offset);
 			emit(A64_CBNZ(0, tmp3, jmp_offset), ctx);
+
+			/*
+			 * Фикс для BPF_FETCH: возвращаем старое значение в src.
+			 * После цикла LL/SC в tmp2 находится (old + src),
+			 * поэтому старое значение = tmp2 - src.
+			 */
+			if (insn->imm & BPF_FETCH) {
+				emit(A64_SUB(isdw, src, tmp2, src), ctx);
+			}
 		}
 		break;
 

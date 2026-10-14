@@ -1334,6 +1334,7 @@ send:
 
 	dev->stats.tx_packets++;
 	dev->stats.tx_bytes += skb->len;
+	netif_trans_update(dev);
 	ret = NETDEV_TX_OK;
 out:
 	if (atomic_read(&wwan_ptr->outstanding_pkts) == 0) {
@@ -1351,6 +1352,15 @@ static void ipa3_wwan_tx_timeout(struct net_device *dev)
 	if (atomic_read(&wwan_ptr->outstanding_pkts) != 0)
 		IPAWANERR("[%s] data stall in UL, %d outstanding\n",
 			dev->name, atomic_read(&wwan_ptr->outstanding_pkts));
+
+	/* 1. Считаем ошибку передачи */
+	dev->stats.tx_errors++;
+
+	/* 2. Обновляем метку времени, чтобы сбросить сторожевой таймер dev_watchdog */
+	netif_trans_update(dev);
+
+	/* 3. Принудительно будим зависшую сетевую очередь */
+	netif_wake_queue(dev);
 }
 
 /**

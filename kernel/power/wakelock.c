@@ -249,6 +249,7 @@ int pm_wake_lock(const char *buf)
 
 int pm_wake_unlock(const char *buf)
 {
+	const char *str = buf;
 	struct wakelock *wl;
 	size_t len;
 	int ret = 0;
@@ -256,13 +257,11 @@ int pm_wake_unlock(const char *buf)
 	if (!capable(CAP_BLOCK_SUSPEND))
 		return -EPERM;
 
-	len = strlen(buf);
-	if (!len)
-		return -EINVAL;
+	/* Парсим имя вейклока аналогично pm_wake_lock (до первого пробела/перевода строки) */
+	while (*str && !isspace(*str))
+		str++;
 
-	if (buf[len-1] == '\n')
-		len--;
-
+	len = str - buf;
 	if (!len)
 		return -EINVAL;
 
@@ -271,6 +270,13 @@ int pm_wake_unlock(const char *buf)
 	wl = wakelock_lookup_add(buf, len, false);
 	if (IS_ERR(wl)) {
 		ret = PTR_ERR(wl);
+		/*
+		 * Если вейклок не найден (или уже освобожден), возвращаем 0 (успех),
+		 * так как цель достигнута — лок не удерживается.
+		 * Это предотвращает спам ошибками от android.system.suspend.
+		 */
+		if (ret == -EINVAL)
+			ret = 0;
 		goto out;
 	}
 	__pm_relax(wl->ws);
