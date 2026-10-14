@@ -154,9 +154,7 @@
 	qrd_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;
 /* Huaqin modify for ZQL1650  by fangaijun at 2018/02/1 start */
-#ifdef CONFIG_MACH_ASUS_X00TD
 		#include "fg-gen3-batterydata-3292665_Huaqin_QL1650cos_5000mAh.dtsi"
-#endif
 /* Huaqin modify for ZQL1650  by fangaijun at 2018/02/1 end */
 	};
 };
