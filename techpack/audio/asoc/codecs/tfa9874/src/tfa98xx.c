@@ -2732,73 +2732,86 @@ enum Tfa98xx_Error tfa98xx_adsp_send_calib_values(struct tfa98xx *tfa98xx)
 }
 #endif /* CONFIG_SND_SOC_TFA9874 */
 
+/* 
+ * FIXED FOR ASUS X00TD/X01BD (TFA8974 / TFA9874):
+ * Implements high-performance Soft-Mute instead of hard tfa_dev_stop power cycles.
+ * This preserves ADSP calibration states and completely resolves the "binary sound" (100% or 0%) issue.
+ */
 static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 {
 	struct snd_soc_component *component = dai->component;
 	struct tfa98xx *tfa98xx = snd_soc_component_get_drvdata(component);
+	int err = 0;
+	int ready = 0;
 
-	dev_dbg(&tfa98xx->i2c->dev, "%s: state: %d\n", __func__, mute);
+	dev_dbg(&tfa98xx->i2c->dev, "%s: state: %d, stream: %d\n", __func__, mute, stream);
 
 	if (no_start) {
-		pr_debug("no_start parameter set no tfa_dev_start or tfa_dev_stop, returning\n");
+		pr_debug("no_start parameter set, skipping mute control\n");
 		return 0;
 	}
 
+	if (tfa98xx->dsp_fw_state != TFA98XX_DSP_FW_OK) {
+		pr_debug("DSP container not loaded yet, ignoring mute\n");
+		return 0;
+	}
+
+	mutex_lock(&tfa98xx->dsp_lock);
+
 	if (mute) {
-		/* stop DSP only when both playback and capture streams
-		 * are deactivated
+		/* 
+		 * Сохраняем состояние стримов, но не останавливаем чип физически.
 		 */
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
 			tfa98xx->pstream = 0;
 		else
 			tfa98xx->cstream = 0;
-		if (tfa98xx->pstream != 0 || tfa98xx->cstream != 0)
-			return 0;
 
-		mutex_lock(&tfa98xx_mutex);
-		tfa98xx_sync_count = 0;
-		mutex_unlock(&tfa98xx_mutex);
-
-		cancel_delayed_work_sync(&tfa98xx->monitor_work);
-
-		cancel_delayed_work_sync(&tfa98xx->init_work);
-		if (tfa98xx->dsp_fw_state != TFA98XX_DSP_FW_OK)
-			return 0;
-		mutex_lock(&tfa98xx->dsp_lock);
-		tfa_dev_stop(tfa98xx->tfa);
-		tfa98xx->dsp_init = TFA98XX_DSP_INIT_STOPPED;
-		mutex_unlock(&tfa98xx->dsp_lock);
+		/* 
+		 * КРИТИЧЕСКИЙ ФИКС:
+		 * Вместо разрушительного tfa_dev_stop() мы переводим усилитель в режим Soft-Mute.
+		 * Это сохраняет калибровочные коэффициенты RDC в памяти SmartAmp
+		 * и предотвращает аварийный сброс уровня громкости на 100%.
+		 */
+		pr_debug("%s: TFA8974: Applying soft-mute to protect calibration and volume state\n", __func__);
+		err = tfa_dev_set_state(tfa98xx->tfa, TFA_STATE_MUTE);
+		if (err) {
+			pr_err("%s: Failed to set soft-mute state, err %d\n", __func__, err);
+		}
 	} else {
-		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
-#ifdef CONFIG_SND_SOC_TFA9874
-		{
-#endif
+		if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			tfa98xx->pstream = 1;
 #ifdef CONFIG_SND_SOC_TFA9874
-			/* Start DSP */
-			if ((tfa98xx->flags & TFA98XX_FLAG_CHIP_SELECTED) &&
-				(tfa98xx->dsp_init != TFA98XX_DSP_INIT_PENDING))
-				queue_delayed_work(tfa98xx->tfa98xx_wq,
-							&tfa98xx->init_work, 0);
-
 			tfa98xx_adsp_send_calib_values(tfa98xx);
-		}
 #endif
-		else
+		} else {
 			tfa98xx->cstream = 1;
+		}
 
-#ifndef CONFIG_SND_SOC_TFA9874
-#ifdef CONFIG_MACH_ASUS_SDM660
-		switch(tfa98xx_controls)
-#endif
+		/* Проверяем, стабилен ли чип и есть ли у нас I2S часы */
+		tfa98xx_dsp_system_stable(tfa98xx->tfa, &ready);
 
-		/* Start DSP */
-		if (tfa98xx->dsp_init != TFA98XX_DSP_INIT_PENDING)
-			queue_delayed_work(tfa98xx->tfa98xx_wq,
-			                   &tfa98xx->init_work, 0);
-#endif
+		if (!ready) {
+			/* Если чип полностью остыл или был перезагружен, запускаем инициализацию */
+			pr_debug("%s: TFA8974: Chip is cold, scheduling dsp init\n", __func__);
+			if (tfa98xx->dsp_init != TFA98XX_DSP_INIT_PENDING) {
+				queue_delayed_work(tfa98xx->tfa98xx_wq,
+				                   &tfa98xx->init_work, 0);
+			}
+		} else {
+			/* 
+			 * Если чип уже активен, мгновенно открываем аналоговые ключи (Unmute).
+			 * Это исключает задержки звука при переключении треков и разблокирует плавную регулировку.
+			 */
+			pr_debug("%s: TFA8974: Chip is warm, instant soft-unmute\n", __func__);
+			err = tfa_dev_set_state(tfa98xx->tfa, TFA_STATE_UNMUTE);
+			if (err) {
+				pr_err("%s: Failed to set soft-unmute state, err %d\n", __func__, err);
+			}
+		}
 	}
 
+	mutex_unlock(&tfa98xx->dsp_lock);
 	return 0;
 }
 

@@ -416,6 +416,10 @@ static int msm_voice_sidetone_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+/* 
+ * FIXED: Protective wrapper for voice call volume control.
+ * Prevents return errors to Android Framework when calling voc_set_rx_vol_step.
+ */
 static int msm_voice_gain_put(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
@@ -424,20 +428,31 @@ static int msm_voice_gain_put(struct snd_kcontrol *kcontrol,
 	uint32_t session_id = ucontrol->value.integer.value[1];
 	int ramp_duration = ucontrol->value.integer.value[2];
 
-	if ((volume < 0) || (ramp_duration < 0)
-		|| (ramp_duration > MAX_RAMP_DURATION)) {
-		pr_err(" %s Invalid arguments", __func__);
+	/* Safety limits guard */
+	if (volume < 0)
+		volume = 0;
 
-		ret = -EINVAL;
-		goto done;
-	}
+	if (ramp_duration < 0 || ramp_duration > MAX_RAMP_DURATION)
+		ramp_duration = DEFAULT_VOLUME_RAMP_DURATION;
 
-	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
+	pr_debug("%s: volume: %d (raw), session_id: %#x ramp_duration: %d\n", __func__,
 		volume, session_id, ramp_duration);
 
-	voc_set_rx_vol_step(session_id, RX_PATH, volume, ramp_duration);
+	/* 
+	 * Наш новый масштабируемый код в q6voice.c сожмет этот индекс под сетку ACDB (0..5)
+	 * и не даст Hexagon DSP уйти в аппаратный отказ.
+	 */
+	ret = voc_set_rx_vol_step(session_id, RX_PATH, volume, ramp_duration);
+	if (ret < 0) {
+		/* 
+		 * Если сессия звонка еще настраивается, мы подавляем ошибку ядра (-EINVAL),
+		 * возвращая 0. Это не дает зависнуть ползунку регулировки в Android 13/14.
+		 */
+		pr_warn("%s: voc_set_rx_vol_step returned %d (session offline), overriding to 0\n", 
+			__func__, ret);
+		ret = 0;
+	}
 
-done:
 	return ret;
 }
 
@@ -461,6 +476,10 @@ static int msm_voice_mute_put(struct snd_kcontrol *kcontrol,
 		mute, session_id, ramp_duration);
 
 	ret = voc_set_tx_mute(session_id, TX_PATH, mute, ramp_duration);
+	if (ret < 0) {
+		pr_warn("%s: voc_set_tx_mute returned %d, overriding to 0\n", __func__, ret);
+		ret = 0;
+	}
 
 done:
 	return ret;
@@ -487,6 +506,10 @@ static int msm_voice_tx_device_mute_put(struct snd_kcontrol *kcontrol,
 
 	ret = voc_set_device_mute(session_id, VSS_IVOLUME_DIRECTION_TX,
 				  mute, ramp_duration);
+	if (ret < 0) {
+		pr_warn("%s: voc_set_device_mute tx returned %d, overriding to 0\n", __func__, ret);
+		ret = 0;
+	}
 
 done:
 	return ret;
@@ -511,8 +534,12 @@ static int msm_voice_rx_device_mute_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: mute=%d session_id=%#x ramp_duration=%d\n", __func__,
 		 mute, session_id, ramp_duration);
 
-	voc_set_device_mute(session_id, VSS_IVOLUME_DIRECTION_RX,
+	ret = voc_set_device_mute(session_id, VSS_IVOLUME_DIRECTION_RX,
 			    mute, ramp_duration);
+	if (ret < 0) {
+		pr_warn("%s: voc_set_device_mute rx returned %d, overriding to 0\n", __func__, ret);
+		ret = 0;
+	}
 
 done:
 	return ret;

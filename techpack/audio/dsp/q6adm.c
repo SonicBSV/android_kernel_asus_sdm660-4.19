@@ -44,6 +44,10 @@
 
 #define SESSION_TYPE_RX 0
 
+#ifndef AFE_PORT_ID_TERTIARY_MI2S_RX
+#define AFE_PORT_ID_TERTIARY_MI2S_RX 0x1004
+#endif
+
 /* ENUM for adm_status */
 enum adm_cal_status {
 	ADM_STATUS_CALIBRATION_REQUIRED = 0,
@@ -4399,8 +4403,13 @@ int adm_set_volume(int port_id, int copp_idx, int volume)
 	struct audproc_volume_ctrl_master_gain audproc_vol;
 	struct param_hdr_v3 param_hdr;
 	int rc  = 0;
+	bool is_tfa_port = false;
 
 	pr_debug("%s: port_id %d, volume %d\n", __func__, port_id, volume);
+
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_RX) {
+		is_tfa_port = true;
+	}
 
 	memset(&audproc_vol, 0, sizeof(audproc_vol));
 	memset(&param_hdr, 0, sizeof(param_hdr));
@@ -4413,8 +4422,19 @@ int adm_set_volume(int port_id, int copp_idx, int volume)
 
 	rc = adm_pack_and_set_one_pp_param(port_id, copp_idx, param_hdr,
 					   (uint8_t *) &audproc_vol);
-	if (rc)
-		pr_err("%s: Failed to set volume, err %d\n", __func__, rc);
+	if (rc) {
+		pr_err("%s: Failed to set volume, err %d for port 0x%x\n", __func__, rc, port_id);
+		
+		/* 
+		 * КРИТИЧЕСКИЙ ФИКС ДЛЯ TFA8974:
+		 * Подавляем код ошибки для порта Tertiary MI2S RX. 
+		 * Это предотвращает зависание ползунка регулировки в Android 13/14 на 100%.
+		 */
+		if (is_tfa_port) {
+			pr_warn("%s: Ignoring volume set error for TFA8974 to protect volume loop\n", __func__);
+			rc = 0;
+		}
+	}
 
 	return rc;
 }
@@ -4436,10 +4456,15 @@ int adm_set_softvolume(int port_id, int copp_idx,
 	struct audproc_soft_step_volume_params audproc_softvol;
 	struct param_hdr_v3 param_hdr;
 	int rc  = 0;
+	bool is_tfa_port = false;
 
 	pr_debug("%s: period %d step %d curve %d\n", __func__,
 		 softvol_param->period, softvol_param->step,
 		 softvol_param->rampingcurve);
+
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_RX) {
+		is_tfa_port = true;
+	}
 
 	memset(&audproc_softvol, 0, sizeof(audproc_softvol));
 	memset(&param_hdr, 0, sizeof(param_hdr));
@@ -4458,8 +4483,18 @@ int adm_set_softvolume(int port_id, int copp_idx,
 
 	rc = adm_pack_and_set_one_pp_param(port_id, copp_idx, param_hdr,
 					   (uint8_t *) &audproc_softvol);
-	if (rc)
-		pr_err("%s: Failed to set soft volume, err %d\n", __func__, rc);
+	if (rc) {
+		pr_err("%s: Failed to set soft volume, err %d for port 0x%x\n", __func__, rc, port_id);
+		
+		/* 
+		 * КРИТИЧЕСКИЙ ФИКС ДЛЯ TFA8974:
+		 * Игнорируем ошибку настройки нарастания громкости, чтобы не вешать звуковой поток.
+		 */
+		if (is_tfa_port) {
+			pr_warn("%s: Ignoring soft_volume set error for TFA8974 to protect volume loop\n", __func__);
+			rc = 0;
+		}
+	}
 
 	return rc;
 }

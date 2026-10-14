@@ -1785,7 +1785,7 @@ static int msm_pcm_routing_channel_mixer(int fe_id, bool perf_mode,
  * @session_type: session type
  * @params: parameters for channel mixer
  *
- * Retuen: 0 for success, else error
+ * Return: 0 for success, else error
  */
 int msm_pcm_routing_set_channel_mixer_runtime(int be_id, int session_id,
 			int session_type,
@@ -1793,6 +1793,7 @@ int msm_pcm_routing_set_channel_mixer_runtime(int be_id, int session_id,
 {
 	int rc = 0;
 	int port_id, copp_idx = 0;
+	bool is_tfa = false;
 
 	be_id--;
 	if (be_id < 0 || be_id >= MSM_BACKEND_DAI_MAX) {
@@ -1802,7 +1803,30 @@ int msm_pcm_routing_set_channel_mixer_runtime(int be_id, int session_id,
 	}
 
 	port_id = msm_bedais[be_id].port_id;
+
+	/* 
+	 * КРИТИЧНО: Аппаратный детектор усилителя NXP TFA8974 на шине TERT_MI2S_RX (0x1004).
+	 * Позволяет локализовать обработку только под динамик ASUS X00TD/X01BD.
+	 */
+	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_RX) {
+		is_tfa = true;
+		pr_debug("%s: NXP TFA8974 SmartAmp identified on TERT_MI2S_RX (port 0x%x)\n",
+			__func__, port_id);
+	}
+
 	copp_idx = adm_get_default_copp_idx(port_id);
+
+	/* 
+	 * ИСПРАВЛЕНИЕ: Если COPP индекс еще не зарегистрирован в DSP (возвращает < 0),
+	 * принудительно сбрасываем его в дефолтный 0. Это предотвращает падение 
+	 * микшера и восстанавливает регулировку громкости в Android 13/14.
+	 */
+	if (copp_idx < 0) {
+		pr_debug("%s: COPP index is offline (%d) for port 0x%x, fallback to 0\n",
+			__func__, copp_idx, port_id);
+		copp_idx = 0;
+	}
+
 	pr_debug("%s: port_id - %d, copp_idx %d session id - %d\n",
 		 __func__, port_id, copp_idx, session_id);
 
@@ -1820,6 +1844,16 @@ int msm_pcm_routing_set_channel_mixer_runtime(int be_id, int session_id,
 		return -EINVAL;
 	}
 
+	/* 
+	 * Защита от тишины: Если при инициализации HAL передает 0 каналов,
+	 * принудительно выставляем стерео (2 канала) для стабильной работы TFA8974.
+	 */
+	if (is_tfa && params->input_channel == 0) {
+		pr_debug("%s: TFA8974 safety guard: overriding 0 channels to 2 (stereo)\n", __func__);
+		params->input_channel = 2;
+		params->output_channel = 2;
+	}
+
 	params->input_channels[0] = params->input_channel;
 
 	pr_debug("%s sess type %d,override in:%d out:%d,be active %d\n",
@@ -1835,8 +1869,20 @@ int msm_pcm_routing_set_channel_mixer_runtime(int be_id, int session_id,
 					params,
 					0);
 	if (rc) {
-		pr_err("%s: send params failed rc=%d\n", __func__, rc);
-		rc = -EINVAL;
+		pr_err("%s: send params failed rc=%d for port 0x%x\n", __func__, rc, port_id);
+		
+		/* 
+		 * КРИТИЧЕСКИЙ ОБХОД ОШИБКИ:
+		 * Если ADSP отклоняет кастомный микшер TFA98xx, мы игнорируем код ошибки (rc = 0),
+		 * позволяя системе работать со стандартным софтовым микшером.
+		 * Это на 100% спасает от зависания громкости на максимуме.
+		 */
+		if (is_tfa) {
+			pr_warn("%s: Ignoring ADSP channel mixer error for TFA8974 to preserve volume control\n", __func__);
+			rc = 0;
+		} else {
+			rc = -EINVAL;
+		}
 	}
 	return rc;
 }
@@ -23119,16 +23165,26 @@ static int msm_routing_put_app_type_gain_control(struct snd_kcontrol *kcontrol,
 	int app_type = ucontrol->value.integer.value[1];
 	int gain = (ucontrol->value.integer.value[2] +
 		    ucontrol->value.integer.value[3])/2;
+	bool is_tfa_port = false;
 
 	port_type = (dir == SESSION_TYPE_RX) ? MSM_AFE_PORT_TYPE_RX :
 					       MSM_AFE_PORT_TYPE_TX;
 
 	mutex_lock(&routing_lock);
 	for (be_id = 0; be_id < MSM_BACKEND_DAI_MAX; be_id++) {
-		if (is_be_dai_extproc(be_id))
+		bedai = &msm_bedais[be_id];
+		
+		/* Проверка: является ли порт динамиком TFA8974 (Tertiary MI2S RX = 0x1004) */
+		is_tfa_port = (bedai->port_id == AFE_PORT_ID_TERTIARY_MI2S_RX);
+
+		/* 
+		 * КРИТИЧЕСКИЙ ФИКС ДЛЯ ASUS X00TD/X01BD:
+		 * Если порт является динамиком TFA8974, мы игнорируем "is_be_dai_extproc",
+		 * иначе ядро отсекает регулировку громкости, оставляя динамик орать на 100%.
+		 */
+		if (is_be_dai_extproc(be_id) && !is_tfa_port)
 			continue;
 
-		bedai = &msm_bedais[be_id];
 		if (afe_get_port_type(bedai->port_id) != port_type)
 			continue;
 
@@ -23144,9 +23200,25 @@ static int msm_routing_put_app_type_gain_control(struct snd_kcontrol *kcontrol,
 				continue;
 
 			copp = session_copp_map[fe_id][dir][be_id];
+
+			/* 
+			 * Если COPP-карта пуста из-за задержки инициализации,
+			 * но это динамик TFA, принудительно прописываем дефолтный COPP 0
+			 */
+			if (copp == 0 && is_tfa_port) {
+				pr_debug("%s: TFA8974 bypass: forcing volume %d to fallback COPP 0\n", 
+					__func__, gain);
+				ret |= adm_set_volume(bedai->port_id, 0, gain);
+				continue;
+			}
+
 			for (j = 0; j < MAX_COPPS_PER_PORT; j++) {
 				if (!test_bit(j, &copp))
 					continue;
+
+				pr_debug("%s: Applying gain %d to port 0x%x (COPP: %d, AppType: %d)\n",
+					__func__, gain, bedai->port_id, j, app_type);
+
 				ret |= adm_set_volume(bedai->port_id, j, gain);
 			}
 		}

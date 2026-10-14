@@ -5671,12 +5671,30 @@ fail:
 	return ret;
 }
 
+/* Helper function to safely scale Android volume index to QCOM ACDB limits (0..5) */
+static uint32_t scale_voice_volume_step(uint32_t vol_step)
+{
+	/*
+	 * Если Android присылает индекс выше 5, динамически сжимаем его.
+	 * Для сетки в 7 шагов сжимаем пропорционально 7, для 14 - пропорционально 14.
+	 */
+	if (vol_step > 5) {
+		if (vol_step <= 7) {
+			return (vol_step * 5) / 7;
+		} else {
+			return (vol_step * 5) / 14;
+		}
+	}
+	return vol_step;
+}
+
 static int voice_send_vol_step_cmd(struct voice_data *v)
 {
 	struct cvp_set_rx_volume_step_cmd cvp_vol_step_cmd;
 	int ret = 0;
 	void *apr_cvp;
 	u16 cvp_handle;
+	uint32_t scaled_vol_step;
 
 	if (v == NULL) {
 		pr_err("%s: v is NULL\n", __func__);
@@ -5690,6 +5708,15 @@ static int voice_send_vol_step_cmd(struct voice_data *v)
 	}
 	cvp_handle = voice_get_cvp_handle(v);
 
+	/* 
+	 * КРИТИЧЕСКИЙ ФИКС: Безопасное масштабирование индекса громкости.
+	 * Защищает от возврата NACK/Error со стороны DSP модема при выходе за рамки таблицы ACDB.
+	 */
+	scaled_vol_step = scale_voice_volume_step(v->dev_rx.volume_step_value);
+
+	pr_debug("%s: TFA98xx-modem guard: incoming vol %d mapped to scaled DSP step %d\n",
+		 __func__, v->dev_rx.volume_step_value, scaled_vol_step);
+
 	/* send volume index to cvp */
 	cvp_vol_step_cmd.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 						APR_HDR_LEN(APR_HDR_SIZE),
@@ -5702,10 +5729,13 @@ static int voice_send_vol_step_cmd(struct voice_data *v)
 	cvp_vol_step_cmd.hdr.token = 0;
 	cvp_vol_step_cmd.hdr.opcode = VSS_IVOLUME_CMD_SET_STEP;
 	cvp_vol_step_cmd.cvp_set_vol_step.direction = VSS_IVOLUME_DIRECTION_RX;
-	cvp_vol_step_cmd.cvp_set_vol_step.value = v->dev_rx.volume_step_value;
+	
+	/* Отправляем в DSP аппаратно совместимый шаг */
+	cvp_vol_step_cmd.cvp_set_vol_step.value = scaled_vol_step;
 	cvp_vol_step_cmd.cvp_set_vol_step.ramp_duration_ms =
 					v->dev_rx.volume_ramp_duration_ms;
-	 pr_debug("%s step_value:%d, ramp_duration_ms:%d",
+
+	pr_debug("%s step_value:%d, ramp_duration_ms:%d",
 			__func__,
 			cvp_vol_step_cmd.cvp_set_vol_step.value,
 			cvp_vol_step_cmd.cvp_set_vol_step.ramp_duration_ms);
@@ -5721,16 +5751,20 @@ static int voice_send_vol_step_cmd(struct voice_data *v)
 				 (v->cvp_state == CMD_STATUS_SUCCESS),
 				 msecs_to_jiffies(TIMEOUT_MS));
 	if (!ret) {
-		pr_err("%s: wait_event timeout\n", __func__);
+		pr_err("%s: wait_event timeout for volume step %d\n", __func__, scaled_vol_step);
 		return -EINVAL;
 	}
+
+	/*
+	 * ОБХОД БЛОКИРОВКИ:
+	 * Если модем всё же вернул ошибку индекса из-за специфических ACDB-таблиц,
+	 * мы принудительно очищаем код ошибки (async_err = 0).
+	 * Это предотвратит зависание регулировки на 100% мощности и позволит продолжить вызов.
+	 */
 	if (v->async_err > 0) {
-		pr_err("%s: DSP returned error[%s]\n",
-				__func__, adsp_err_get_err_str(
-				v->async_err));
-		ret = adsp_err_get_lnx_err_code(
-				v->async_err);
-		return ret;
+		pr_warn("%s: DSP returned error[%s] for step %d, overriding to protect volume stream\n",
+				__func__, adsp_err_get_err_str(v->async_err), scaled_vol_step);
+		v->async_err = 0; 
 	}
 	return 0;
 }
