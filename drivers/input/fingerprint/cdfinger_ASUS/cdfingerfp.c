@@ -240,8 +240,17 @@ static int cdfinger_free_gpio(struct cdfingerfp_data *cdfinger)
 	CDFINGER_DBG("enter\n");
 
 	if (gpio_is_valid(cdfinger->irq_num)) {
+		/* Фикс: Освобождаем прерывание ТОЛЬКО если оно было реально инициализировано */
+		if (isInit == 1) {
+			int irq = gpio_to_irq(cdfinger->irq_num);
+			if (irq > 0) {
+				disable_irq_wake(irq); // Отключаем пробуждение по IRQ
+				free_irq(irq, (void*)cdfinger);
+			}
+			isInit = 0;
+		}
+		/* Фикс: GPIO освобождаем строго ПОСЛЕ освобождения IRQ */
 		gpio_free(cdfinger->irq_num);
-		free_irq(gpio_to_irq(cdfinger->irq_num), (void*)cdfinger);
 	}
 
 	if (gpio_is_valid(cdfinger->reset_num)) {
@@ -530,8 +539,9 @@ static long cdfinger_ioctl(struct file* filp, unsigned int cmd, unsigned long ar
 			break;
 
 		case CDFINGER_RELEASE_DEVICE:
-			isInit = 0;
+			/* Фикс: Сначала освобождаем ресурсы, пока флаг isInit равен 1 */
 			cdfinger_free_gpio(cdfinger);
+			isInit = 0; 
 #ifdef SUPPORT_ID_NUM
 			cdfinger->chip_id = 0x00;
 #endif
