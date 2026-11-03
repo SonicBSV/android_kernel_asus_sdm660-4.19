@@ -3,20 +3,12 @@
 #include "sdm660.dtsi"
 #include "sdm660-qrd.dtsi"
 #include "sdm660-pinctrl.dtsi"
-#include "dsi-panel-nt36672-1080p-video-txd.dtsi"
-#include "dsi-panel-nt36672-1080p-video.dtsi"
 /* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 start */
 #include "dsi-panel-nt36672ah-1080p-video-kd.dtsi"
 /* Huaqin modify for add nt36672ah_kd lcm by qimaokang at 2018/08/06 end */
 /* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 start */
 #include "dsi-panel-hx83112a-1080p-video-tm.dtsi"
 /* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 end */
-
-/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 start */
-#ifdef CONFIG_1650P_TD4310_TXD
-#include "dsi-panel-td4310-1080p-video-txd.dtsi"
-#endif
-/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 end */
 
 #include "sdm660-internal-codec.dtsi"
 
@@ -85,8 +77,6 @@
 	/delete-property/ qcom,esd-check-enabled;
 };
 /* Huaqin modify for add hx83112a_tm lcm by qimaokang at 2018/09/04 end */
-
-/* Huaqin modify for add td4310_txd lcm by wanchunshuang at 2018/12/24 start */
 
 &pm660l_lcdb {
 	status = "ok";
@@ -186,33 +176,37 @@
 };
 /* Huaqin add for sar sensor by zhuqiang at 2018/08/03 end */
 
-/* Huaqin add for als/ps by zhuqiang at 2018/08/03 start */
 &i2c_7 {
+	/* for P/L Sensor */
 	status = "okay";
 	stk@47 {
 		compatible = "stk,stk3x3x";
 		reg = <0x47>;
 		interrupt-parent = <&tlmm>;
-		interrupts = <45 0x2>;
+		interrupts = <45 IRQ_TYPE_EDGE_FALLING>;
 		vdd-supply = <&pm660l_l3>;
 		vio-supply = <&pm660_l14>;
 		stk,irq-gpio = <&tlmm 45 0x02>;
+
 		pinctrl-names = "psensor_active", "psensor_suspend";
 		pinctrl-0 = <&psensor_int_active>;
 		pinctrl-1 = <&psensor_int_suspend>;
+
 		stk,state-reg = <0x0>;
 		stk,psctrl-reg = <0xB1>;
 		stk,alsctrl-reg = <0x72>;
 		stk,ledctrl-reg = <0x60>;
-		/* Huaqin modify for Power consumption by zhuqiang at 2018/09/20 start */
 		stk,wait-reg = <0x1F>;
-		/* Huaqin modify for Power consumption by zhuqiang at 2018/09/20 end */
 		stk,ps-thdh = <1700>;
 		stk,ps-thdl = <1500>;
 		stk,transmittance = <1100>;
+
+		/* 4.19 additions (analogous to X00TD STK3x1x tuning) */
+		stk,use-fir;
+		stk,ps-gain = <4>;
+		stk,als-gain = <64>;
 	};
 };
-/* Huaqin add for als/ps by zhuqiang at 2018/08/03 end */
 
 &cci {
 	qcom,eeprom@3 {
@@ -253,22 +247,27 @@
 };
 
 &sdhc_2 {
+	/* Убираем сломанный interrupt-map.
+	 * 4 ячейки для GIC (&intc 0 0 125) несовместимы
+	 * с #interrupt-cells=<3> в GIC → sdhci_pltfm_init -6 */
 	/delete-property/ interrupt-map;
-	
-	/* ИСПРАВЛЕНО: Ровно по 3 ячейки для GIC (&intc 0 <irq> <trigger>) */
-	interrupt-map = <0 &intc 0 125 4>,
-			<1 &intc 0 221 4>,
-			<2 &tlmm 54 3>;
+	/delete-property/ interrupt-map-mask;
+	/delete-property/ interrupt-parent;
+	/delete-property/ #interrupt-cells;
+	/delete-property/ #address-cells;
 
-	/* cd-gpios тип EDGE_BOTH (0x3) для детекции карты */
-	cd-gpios = <&tlmm 54 0x3>;
+	interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+		     <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-names = "hc_irq", "pwr_irq";
 
-	/* ФИКС: Добавляем калибровочные частоты sdhc для устранения Reset data parsing error */
-	qcom,dll-hsr-list = <0x00078000 0x00078000 0x00078000 0x00078000 0x00078000>;
-};
+	/* Совместимость со всеми картами */
+	no-1-8-v;
 
-&mdss_dp_ctrl {
-	status = "disabled";
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
+	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+
+	status = "ok";
 };
 
 &mdss_dp_pll {

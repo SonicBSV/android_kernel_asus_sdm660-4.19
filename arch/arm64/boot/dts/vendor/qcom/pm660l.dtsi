@@ -163,10 +163,6 @@
 			qcom,pmic-revid = <&pm660l_revid>;
 			qcom,auto-calibration;
 			qcom,sync-dly = <800>;
-			
-			/* ФИКС: Явно указываем поддерживаемые физические каналы подсветки
-			 * для ухода от предупреждения WLED sink config=f0 -> b0 */
-			qcom,enabled-strings = <0 1 3>;
 			status = "ok";
 		};
 

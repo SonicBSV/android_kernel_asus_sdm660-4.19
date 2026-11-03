@@ -133,64 +133,34 @@
 		qcom,dig-load = <40000>;
 		qcom,dig-vtg-min = <1808000>;
 		qcom,dig-vtg-max = <1808000>;
-		
-		qcom,fb-resume-delay-us = <15000>;
-		
+		qcom,fb-resume-delay-us = <10000>;
 		qcom,afe-force-power-on;
 		qcom,afe-power-on-delay-us = <1000>;
 		qcom,afe-power-off-delay-us = <6>;
 	};
 
-	common_fp {
-		compatible = "common,fingerprint";
-		interrupt-parent = <&tlmm>;
-		interrupts = <72 0x0>;
-
-		common,gpio_reset   = <&tlmm 20 0>;
-		common,gpio_irq		= <&tlmm 72 0>;
-		common,gpio_vdd		= <&pm660l_gpios 5 0>;
-		pinctrl-names		= "commonfp_reset_reset",
-					  "commonfp_reset_active",
-					  "commonfp_irq_active";
-		pinctrl-0 = <&commonfp_reset_reset>;
-		pinctrl-1 = <&commonfp_reset_active>;
-		pinctrl-2 = <&commonfp_irq_active>;
-	};
-
-/* Huaqin add for ZQL1820-42 by puqirui at 2018/11/01 start */
 	cdfinger_fp {
 		compatible = "cdfinger,fingerprint";
 		interrupt-parent = <&tlmm>;
 		interrupts = <72 0x0>;
-
 		cdfinger,reset_gpio = <&tlmm 20 0>;
 		cdfinger,irq_gpio = <&tlmm 72 0>;
 		cdfinger,gpio_vdd = <&pm660l_gpios 5 0>;
-		pinctrl-names = "cdfinger_active","cdfinger_sleep";
+
+		pinctrl-names = "cdfinger_active",
+				"cdfinger_sleep";
 		pinctrl-0 = <&cdfinger_reset_active &cdfinger_irq_active>;
 		pinctrl-1 = <&cdfinger_reset_sleep &cdfinger_irq_sleep>;
 	};
 
-	focaltech_fingerprint {
-		compatible = "focaltech,fingerprint";
-		interrupt-parent = <&tlmm>;
-		interrupts = <72 0x0>;
-
-		fp,reset_gpio   = <&tlmm 20 0>;
-		fp,irq_gpio        = <&tlmm 72 0>;
-		fp,vdd_gpio        = <&pm660l_gpios 5 0>;
-		pinctrl-names = "focalfp_active","focalfp_sleep";
-		pinctrl-0 = <&focalfp_reset_active &focalfp_irq_active>;
-		pinctrl-1 = <&focalfp_reset_sleep &focalfp_irq_sleep>;
-	};
-/* Huaqin add for ZQL1820-42 by puqirui at 2018/11/01 end */
-
-/* Huaqin modify for ZQL1650-143 by wangxiang at 2018/02/09 start */
 	goodix_fingerprint {
 		compatible = "goodix,fingerprint";
+		interrupt-parent = <&tlmm>;
+		interrupts = <72 0x0>;
+		goodix,reset_gpio = <&tlmm 20 0>;
+		goodix,gpio_vdd	= <&pm660l_gpios 5 0>;
+		goodix,irq_gpio	= <&tlmm 72 0>;
 	};
-/* Huaqin modify for ZQL1650-143 by wangxiang at 2018/02/09 end */
-
 };
 
 /*Huaqin add sar sensors sx9310 by chenyijun5 at 2018/02/07 start*/
@@ -211,7 +181,6 @@
 	};
 };
 /*Huaqin add sar sensors sx9310 by chenyijun5 at 2018/02/07 end*/
-
 &i2c_4 {
 		status = "okay";
 		focaltech@38{
@@ -242,51 +211,43 @@
                };
 };
 
-/* Huaqin modify for ZQL1650-141 by chenyijun5 at 2018/02/01 start */
-&i2c_7 {        /* for P/L Sensor */
+&i2c_7 {
+	/* for P/L Sensor */
 	status = "okay";
 	stk@48 {
 		compatible = "stk,stk3x1x";
 		reg = <0x48>;
 		interrupt-parent = <&tlmm>;
-		interrupts = <45 0x2>;
+		interrupts = <45 IRQ_TYPE_EDGE_FALLING>;
 		vdd-supply = <&pm660l_l3>;
 		vio-supply = <&pm660_l14>;
 		stk,irq-gpio = <&tlmm 45 0x02>;
 		pinctrl-names = "psensor_active", "psensor_suspend";
 		pinctrl-0 = <&psensor_int_active>;
 		pinctrl-1 = <&psensor_int_suspend>;
-		stk,state-reg = <0x0>;
-		stk,psctrl-reg = <0x31>;
-		stk,alsctrl-reg = <0x39>;
-		/* Huaqin modify for psensor led current by chenyijun5 at 2018/02/05 start */
-		stk,ledctrl-reg = <0xFF>;
-		/* Huaqin modify for psensor led current by chenyijun5 at 2018/02/05 end */
-		/* Huaqin modify for alsps wait reg by chenyijun5 at 2018/04/08 start */
-		stk,wait-reg = <0x0A>;
-		/* Huaqin modify for alsps wait reg by chenyijun5 at 2018/04/08 end */
-		/* Huaqin modify for psensor threshold by chenyijun5 at 2018/02/03 start */
-		stk,ps-thdh = <120>;
-		stk,ps-thdl = <90>;
-		/* Huaqin modify for psensor threshold by chenyijun5 at 2018/02/03 end */
-		/* Huaqin modify for lsensor gain by chenyijun5 at 2018/02/27 start */
+		stk,state-reg = <0x00>;
+		stk,psctrl-reg = <0x71>;
+		stk,alsctrl-reg = <0x3A>;
+		stk,ledctrl-reg = <0x7F>;
+		stk,wait-reg = <0x1F>;
+		stk,ps-thdh = <150>;
+		stk,ps-thdl = <100>;
 		stk,transmittance = <1100>;
-		/* Huaqin modify for lsensor gain by chenyijun5 at 2018/02/27 end */
+		stk,use-fir;
+		stk,ps-gain = <4>;
+		stk,als-gain = <64>;
 	};
 };
 /* Huaqin modify for ZQL1650-141 by chenyijun5 at 2018/02/01 end */
-
-/* Huaqin modify for ZQL1820-HQ000001 Fix the bug of identifying ASUS adapter ID by gaochao at 2018/08/04 start */
-/*
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 start */
 &pm660_charger {
        ADC_SW_EN-gpios59 = <&tlmm 71 0x0>;
        ADCPWREN_PMI_GP1-gpios34 = <&tlmm 3 0x0>;
 };
-*/
-/* Huaqin modify for ZQL1820-HQ000001 Fix the bug of identifying ASUS adapter ID by gaochao at 2018/08/04 end */
+/* Huaqin modify for ZQL1650-70 Identify Adapter ID by fangaijun at 2018/02/8 end */
 
 /* ========================================================================= */
-/* СТАБИЛИЗАЦИЯ И ОПТИМИЗАЦИЯ ASUS X00TD (SDM636) ДЛЯ ANDROID 13 */
+/* СТАБИЛИЗАЦИЯ И ОПТИМИЗАЦИЯ ASUS X00TD (SDM636) */
 /* ========================================================================= */
 
 &cci {
@@ -326,19 +287,27 @@
 };
 
 &sdhc_2 {
+	/* Убираем сломанный interrupt-map.
+	 * 4 ячейки для GIC (&intc 0 0 125) несовместимы
+	 * с #interrupt-cells=<3> в GIC → sdhci_pltfm_init -6 */
 	/delete-property/ interrupt-map;
-	
-	/* ИСПРАВЛЕНО: Ровно по 3 ячейки для GIC (&intc 0 <irq> <trigger>) */
-	interrupt-map = <0 &intc 0 125 4>,
-			<1 &intc 0 221 4>,
-			<2 &tlmm 54 3>;
+	/delete-property/ interrupt-map-mask;
+	/delete-property/ interrupt-parent;
+	/delete-property/ #interrupt-cells;
+	/delete-property/ #address-cells;
 
-	/* cd-gpios тип EDGE_BOTH (0x3) для детекции карты */
-	cd-gpios = <&tlmm 54 0x3>;
-};
+	interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+		     <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-names = "hc_irq", "pwr_irq";
 
-&mdss_dp_ctrl {
-	status = "disabled";
+	/* Совместимость со всеми картами */
+	no-1-8-v;
+
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
+	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &sdc2_cd_off>;
+
+	status = "ok";
 };
 
 &mdss_dp_pll {

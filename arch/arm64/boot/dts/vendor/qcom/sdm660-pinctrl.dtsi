@@ -1134,35 +1134,7 @@
 				};
 			};
 		};
-		/* Huaqin add for ZQL1820-145 by zhaojunhai1 at 2018/08/19 start */
-		wcd_gnd_mic_swap {
-			wcd_gnd_mic_swap_idle: wcd_gnd_mic_swap_idle {
-				mux {
-					pins = "gpio999";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio999";
-					drive-strength = <2>;
-					bias-pull-down;
-					output-low;
-				};
-			};
 
-			wcd_gnd_mic_swap_active: wcd_gnd_mic_swap_active {
-				mux {
-					pins = "gpio999";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio999";
-					drive-strength = <2>;
-					bias-disable;
-					output-high;
-				};
-			};
-		};
-		/* Huaqin add for ZQL1820-145 by zhaojunhai1 at 2018/08/19 end */
 		msm_hph_en0 {
 			hph_en0_sleep: hph_en0_sleep {
 				mux {
@@ -2040,47 +2012,6 @@
 					bias-disable;
 				};
 			};
-
-/* Huaqin modify for ZQL1650-143 by wangxiang at 2018/01/23 start */
-			commonfp_reset_reset: commonfp_reset_reset {
-				mux {
-					pins = "gpio20";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio20";
-					drive-strength = <2>;
-					bias-disable = <0>;
-					output-low;
-				};
-			};
-
-			commonfp_reset_active: commonfp_reset_active {
-				mux {
-					pins = "gpio20";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio20";
-					drive-strength = <2>;
-					bias-disable = <0>;
-					output-high;
-				};
-			};
-
-			commonfp_irq_active: commonfp_irq_active {
-				mux {
-					pins = "gpio72";
-					function = "gpio";
-				};
-				config {
-					pins = "gpio72";
-					drive-strength = <2>;
-					bias-disable = <0>;
-					input-enable;
-				};
-			};
-/* Huaqin modify for ZQL1650-143 by wangxiang at 2018/01/23 end */
 
 /* Huaqin add for ZQL1820-42 by puqirui at 2018/11/01 start */
 		cdfinger_reset {

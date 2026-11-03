@@ -304,6 +304,7 @@
 			boot_devices = "soc/c0c4000.sdhci";
 
 			vbmeta {
+                        compatible = "android,vbmeta";
 				status = "disabled";
 			};
 		};
@@ -803,7 +804,9 @@
 		reg-names = "wdt-base";
 		interrupts = <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>,
 				<GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
-		qcom,bark-time = <11000>;
+		/* Huaqin modify for ZQL1650-1340 by liunianliang at 2018/05/15 start */
+		qcom,bark-time = <20000>;
+		/* Huaqin modify for ZQL1650-1340 by liunianliang at 2018/05/15 end */
 		qcom,pet-time = <10000>;
 		qcom,ipi-ping;
 		qcom,wakeup-enable;
@@ -1325,9 +1328,7 @@
 			<  1113600000 0x0404003a 0x052e002e 0x1 2 >,
 			<  1401600000 0x04040049 0x073a003a 0x2 3 >,
 			<  1747200000 0x0404005b 0x09480048 0x2 4 >,
-			<  1958400000 0x04040066 0x0a510051 0x2 5 >,
-			<  2150400000 0x04040070 0x0b590059 0x2 6 >,
-			<  2208000000 0x04040073 0x0b5c005c 0x3 7 >;
+			<  1958400000 0x04040066 0x0a510051 0x2 5 >;
 
 		qcom,up-timer = <1000 1000>;
 		qcom,down-timer = <1000 1000>;
@@ -2866,6 +2867,7 @@
 		pinctrl-0 = <&gpio_key_active &key_vol_up_default>;
 		pinctrl-1 = <&gpio_key_suspend>;
 
+/*
 		camera_focus {
 			label = "camera_focus";
 			gpios = <&tlmm 64 0x1>;
@@ -2882,12 +2884,20 @@
 			debounce-interval = <15>;
 		};
 
+*/
 		vol_up {
 			label = "volume_up";
-			gpios = <&pm660l_gpios 7 0x1>;
+			gpios = <&tlmm 44 0x1>;
 			linux,input-type = <1>;
 			linux,code = <115>;
-			linux,can-disable;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+		vol_down {
+			label = "volume_down";
+			gpios = <&tlmm 43 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
 			gpio-key,wakeup;
 			debounce-interval = <15>;
 		};

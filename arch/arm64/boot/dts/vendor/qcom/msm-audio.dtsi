@@ -29,13 +29,6 @@
 		compatible = "qcom,msm-compr-dsp";
 	};
 
-	pcm2: qcom,msm-ultra-low-latency {
-		compatible = "qcom,msm-pcm-dsp";
-		qcom,msm-pcm-dsp-id = <2>;
-		qcom,msm-pcm-low-latency;
-		qcom,latency-level = "ultra";
-	};
-
 	pcm1: qcom,msm-pcm-low-latency {
 		compatible = "qcom,msm-pcm-dsp";
 		qcom,msm-pcm-dsp-id = <1>;
@@ -789,9 +782,6 @@
 	us_euro_gpio: msm_cdc_pinctrl@75 {
 		compatible = "qcom,msm-cdc-pinctrl";
 		#gpio-cells = <2>;
-		pinctrl-names = "aud_active", "aud_sleep";
-		pinctrl-0 = <&wcd_gnd_mic_swap_active>;
-		pinctrl-1 = <&wcd_gnd_mic_swap_idle>;
 	};
 
 	wcd9xxx_intc: wcd9xxx-irq {
