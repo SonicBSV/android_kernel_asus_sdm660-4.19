@@ -768,7 +768,7 @@ QDF_STATUS sme_ps_enable_auto_ps_timer(mac_handle_t mac_handle,
 			/* Consider this ok since the timer is already started*/
 			sme_debug("auto_ps_timer is already started");
 		} else {
-			sme_err("Cannot start auto_ps_timer");
+			sme_debug("auto_ps_timer already running, skip restart");
 			return QDF_STATUS_E_FAILURE;
 		}
 	}

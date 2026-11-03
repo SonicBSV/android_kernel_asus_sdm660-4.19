@@ -204,7 +204,7 @@ static void hdd_disable_gtk_offload(struct hdd_adapter *adapter)
 
 	status = ucfg_pmo_get_gtk_rsp(adapter->vdev, &gtk_rsp_request);
 	if (status != QDF_STATUS_SUCCESS) {
-		hdd_err("Failed to send get gtk rsp status:%d", status);
+		hdd_debug("GTK rsp not available (offload disabled or FW mismatch); status:%d", status);
 		return;
 	}
 
@@ -436,7 +436,7 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 	/* cache ns request */
 	status = ucfg_pmo_cache_ns_offload_req(ns_req);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to cache ns request; status:%d", status);
+		hdd_debug("NS offload cache skipped (no IPv6 or disabled); status:%d", status);
 		goto free_req;
 	}
 

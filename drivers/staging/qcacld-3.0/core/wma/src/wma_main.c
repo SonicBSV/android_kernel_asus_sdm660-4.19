@@ -5266,7 +5266,8 @@ wma_update_target_vht_cap(struct target_psoc_info *tgt_hdl,
  *			 this API which WMA layer understands
  *
  * This API will convert FW given supported band to enum which WMA layer
- * understands
+ * understands. 5 GHz is not supported on this platform (SDM636 single-band),
+ * so all paths resolve to 2.4 GHz only.
  *
  * Return: QDF_STATUS
  */
@@ -5274,25 +5275,41 @@ static QDF_STATUS wma_update_supported_bands(
 			WLAN_BAND_CAPABILITY supported_bands,
 			WMI_PHY_CAPABILITY *new_supported_bands)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
 	if (!new_supported_bands) {
 		WMA_LOGE("%s: NULL new supported band variable", __func__);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	/*
+	 * Платформа SDM636 (X00TD) — single-band 2.4 GHz.
+	 * 5 GHz не поддерживается аппаратно.
+	 * Независимо от значения из FW, выставляем только 2G.
+	 */
 	switch (supported_bands) {
 	case WLAN_2G_CAPABILITY:
 		*new_supported_bands |= WMI_11G_CAPABILITY;
 		break;
 	case WLAN_5G_CAPABILITY:
-		*new_supported_bands |= WMI_11A_CAPABILITY;
+		/*
+		 * FW сообщил 5G, но аппарат его не поддерживает.
+		 * Игнорируем, оставляем 2G.
+		 */
+		WMA_LOGW("%s: FW reports 5G cap but HW is 2G-only, ignoring",
+			 __func__);
+		*new_supported_bands |= WMI_11G_CAPABILITY;
 		break;
 	default:
-		WMA_LOGE("%s: wrong supported band", __func__);
-		status = QDF_STATUS_E_FAILURE;
+		/*
+		 * Любое другое значение (dual-band enum, bitmask, мусор) —
+		 * безопасный fallback на 2G.
+		 */
+		WMA_LOGW("%s: unexpected band value %d, fallback to 2G",
+			 __func__, supported_bands);
+		*new_supported_bands |= WMI_11G_CAPABILITY;
 		break;
 	}
-	return status;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -6856,6 +6873,9 @@ static void wma_set_hw_mode_params(t_wma_handle *wma_handle,
  * This function updates hw_mode_list with tx_streams, rx_streams,
  * bandwidth, dbs and agile dfs for each hw_mode.
  *
+ * Platform note: SDM636 (X00TD) is 2.4 GHz single-band only.
+ * 5 GHz capabilities reported by FW are ignored.
+ *
  * Returns: 0 for success else failure.
  */
 static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
@@ -6867,7 +6887,6 @@ static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
 	struct mac_ss_bw_info mac0_ss_bw_info = {0};
 	struct mac_ss_bw_info mac1_ss_bw_info = {0};
 	WMI_PHY_CAPABILITY new_supported_band = 0;
-	bool supported_band_update_failure = false;
 	struct wlan_psoc_target_capability_info *tgt_cap_info;
 	int num_hw_modes;
 
@@ -6879,6 +6898,7 @@ static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
 	num_hw_modes = target_psoc_get_num_hw_modes(tgt_hdl);
 	mac_phy_cap = target_psoc_get_mac_phy_cap(tgt_hdl);
 	tgt_cap_info = target_psoc_get_target_caps(tgt_hdl);
+
 	/*
 	 * This list was updated as part of service ready event. Re-populate
 	 * HW mode list from the device capabilities.
@@ -6911,10 +6931,14 @@ static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
 		mac1_ss_bw_info.mac_tx_stream = 0;
 		mac1_ss_bw_info.mac_rx_stream = 0;
 		mac1_ss_bw_info.mac_bw = 0;
-		if (wma_update_supported_bands(tmp->supported_bands,
-						&new_supported_band)
-		   != QDF_STATUS_SUCCESS)
-			supported_band_update_failure = true;
+
+		/*
+		 * wma_update_supported_bands() теперь всегда возвращает
+		 * QDF_STATUS_SUCCESS и выставляет только WMI_11G_CAPABILITY.
+		 * Флаг ошибки больше не нужен.
+		 */
+		wma_update_supported_bands(tmp->supported_bands,
+					   &new_supported_band);
 
 		/* SBS and DBS have dual MAC. Upto 2 MACs are considered. */
 		if ((hw_config_type == WMI_HW_MODE_DBS) ||
@@ -6928,10 +6952,9 @@ static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
 			if ((hw_config_type == WMI_HW_MODE_SBS_PASSIVE) ||
 			    (hw_config_type == WMI_HW_MODE_SBS))
 				sbs_mode = HW_MODE_SBS;
-			if (QDF_STATUS_SUCCESS !=
+
 			wma_update_supported_bands(tmp->supported_bands,
-						&new_supported_band))
-				supported_band_update_failure = true;
+						   &new_supported_band);
 		}
 
 		/* Updating HW mode list */
@@ -6940,13 +6963,22 @@ static QDF_STATUS wma_update_hw_mode_list(t_wma_handle *wma_handle,
 				       sbs_mode);
 	}
 
-	/* overwrite phy_capability which we got from service ready event */
-	if (!supported_band_update_failure) {
-		WMA_LOGD("%s: updating supported band from old[%d] to new[%d]",
-			 __func__, target_if_get_phy_capability(tgt_hdl),
-			 new_supported_band);
-		target_if_set_phy_capability(tgt_hdl, new_supported_band);
+	/*
+	 * Перезаписываем phy_capability из service ready event.
+	 * На SDM636 new_supported_band будет содержать только WMI_11G_CAPABILITY.
+	 * Если по какой-то причине он остался 0 — принудительно ставим 2G.
+	 */
+	if (new_supported_band == 0) {
+		WMA_LOGW("%s: new_supported_band is 0 after loop, "
+			 "forcing WMI_11G_CAPABILITY", __func__);
+		new_supported_band = WMI_11G_CAPABILITY;
 	}
+
+	WMA_LOGI("%s: updating supported band from old[0x%x] to new[0x%x] "
+		 "(2G-only platform)",
+		 __func__, target_if_get_phy_capability(tgt_hdl),
+		 new_supported_band);
+	target_if_set_phy_capability(tgt_hdl, new_supported_band);
 
 	if (QDF_STATUS_SUCCESS !=
 			policy_mgr_update_hw_mode_list(wma_handle->psoc,

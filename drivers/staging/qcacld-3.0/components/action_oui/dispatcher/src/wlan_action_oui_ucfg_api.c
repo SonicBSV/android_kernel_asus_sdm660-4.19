@@ -98,7 +98,7 @@ ucfg_action_oui_parse(struct wlan_objmgr_psoc *psoc,
 	}
 
 	if (action_id >= ACTION_OUI_MAXIMUM_ID) {
-		action_oui_err("Invalid action_oui id: %u", action_id);
+		action_oui_debug("action_oui id %u not supported by FW", action_id);
 		goto exit;
 	}
 
@@ -157,7 +157,7 @@ QDF_STATUS ucfg_action_oui_send(struct wlan_objmgr_psoc *psoc)
 			continue;
 		status = action_oui_send(psoc_priv, id);
 		if (!QDF_IS_STATUS_SUCCESS(status))
-			action_oui_err("Failed to send: %u", id);
+			action_oui_debug("action_oui send skipped for id %u (FW unsupported)", id);
 	}
 
 exit:
@@ -178,7 +178,7 @@ bool ucfg_action_oui_search(struct wlan_objmgr_psoc *psoc,
 	}
 
 	if (action_id >= ACTION_OUI_MAXIMUM_ID) {
-		action_oui_err("Invalid action_oui id: %u", action_id);
+		action_oui_debug("action_oui id %u not supported by FW", action_id);
 		goto exit;
 	}
 

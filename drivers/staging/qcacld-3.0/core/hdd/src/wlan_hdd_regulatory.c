@@ -1292,13 +1292,13 @@ void hdd_send_wiphy_regd_sync_event(struct hdd_context *hdd_ctx)
 
 	status = ucfg_reg_get_regd_rules(hdd_ctx->pdev, &reg_rules_struct);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("could not get reg rules");
+		hdd_debug("could not get reg rules (will retry on country set)");
 		return;
 	}
 
 	reg_rules = &reg_rules_struct;
 	if (!reg_rules->num_of_reg_rules) {
-		hdd_err("no reg rules %d", reg_rules->num_of_reg_rules);
+		hdd_debug("no reg rules yet, count=%d", reg_rules->num_of_reg_rules);
 		return;
 	}
 
