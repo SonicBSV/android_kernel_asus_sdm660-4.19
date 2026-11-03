@@ -78,3 +78,7 @@ obj-$(CONFIG_QTI_XR_SMRTVWR_MISC) += qxr-stdalonevwr.o
 obj-$(CONFIG_FPR_FPC)		+= fpr_FingerprintCard/
 obj-y                           += qrc/
 obj-$(CONFIG_KINECTICS_XR_NORDIC) += kxrctrl/
+
+# Huaqin add for ZQL1650-86 by liunianliang at 2018/02/09 start
+obj-y                           += huaqin/
+# Huaqin add for ZQL1650-86 by liunianliang at 2018/02/09 end
