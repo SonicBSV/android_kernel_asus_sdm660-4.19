@@ -1799,6 +1799,19 @@ int smblib_get_prop_input_suspend(struct smb_charger *chg,
 	return 0;
 }
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 start */
+int smblib_get_prop_charging_enabled(struct smb_charger *chg,
+				  union power_supply_propval *val)
+{
+	val->intval
+		= !((get_client_vote(chg->usb_icl_votable, USER_VOTER) == 0)
+		 && get_client_vote(chg->dc_suspend_votable, USER_VOTER));
+	return 0;
+}
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 end */
+#endif
+
 int smblib_get_prop_batt_present(struct smb_charger *chg,
 				union power_supply_propval *val)
 {
@@ -2125,6 +2138,34 @@ int smblib_set_prop_input_suspend(struct smb_charger *chg,
 	power_supply_changed(chg->batt_psy);
 	return rc;
 }
+
+#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 start */
+int smblib_set_prop_charging_enabled(struct smb_charger *chg,
+				  const union power_supply_propval *val)
+{
+	int rc;
+
+	/* vote 0mA when suspended */
+	rc = vote(chg->usb_icl_votable, USER_VOTER, !(bool)val->intval, 0);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't vote to %s USB rc=%d\n",
+			(bool)val->intval ? "suspend" : "resume", rc);
+		return rc;
+	}
+
+	rc = vote(chg->dc_suspend_votable, USER_VOTER, !(bool)val->intval, 0);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't vote to %s DC rc=%d\n",
+			(bool)val->intval ? "suspend" : "resume", rc);
+		return rc;
+	}
+	
+	power_supply_changed(chg->batt_psy);
+	return rc;
+}
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 end */
+#endif
 
 int smblib_set_prop_batt_capacity(struct smb_charger *chg,
 				  const union power_supply_propval *val)
@@ -2788,15 +2829,7 @@ int smblib_get_prop_die_health(struct smb_charger *chg,
 
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
-/* Huaqin add for ZQL1650-1287 factory version remove before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/5/8 start */
-#ifdef HQ_BUILD_FACTORY
-/* Huaqin add for ZQL1650-71 before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/4/4 start */
-#define DCP_CURRENT_UA			2000000
-/* Huaqin add for ZQL1650-71 before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/4/4 end */
-#else
-#define DCP_CURRENT_UA			500000
-#endif
-/* Huaqin add for ZQL1650-1287 factory version remove before BC1.2 500mA before adapter id 1000mA by fangaijun at 2018/5/8 end */
+#define DCP_CURRENT_UA			2800000
 #define HVDCP_CURRENT_UA		3000000
 #define TYPEC_DEFAULT_CURRENT_UA	900000
 #define TYPEC_MEDIUM_CURRENT_UA		1500000
@@ -3458,10 +3491,11 @@ int smblib_get_prop_slave_current_now(struct smb_charger *chg,
 
 irqreturn_t smblib_handle_debug(int irq, void *data)
 {
+#ifdef DEBUG
 	struct smb_irq_data *irq_data = data;
 	struct smb_charger *chg = irq_data->parent_data;
-
 	smblib_dbg(chg, PR_INTERRUPT, "IRQ: %s\n", irq_data->name);
+#endif
 	return IRQ_HANDLED;
 }
 

@@ -1092,12 +1092,16 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 		rc = smblib_get_prop_batt_present(chg, val);
 		break;
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		val->intval = !get_effective_result(chg->chg_disable_votable);
-		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_get_prop_input_suspend(chg, val);
 		break;
+#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 start */
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		rc = smblib_get_prop_charging_enabled(chg, val);
+		break;
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 end */
+#endif
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		rc = smblib_get_prop_batt_charge_type(chg, val);
 		break;
@@ -1226,12 +1230,16 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		rc = smblib_set_prop_batt_status(chg, val);
 		break;
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		vote(chg->chg_disable_votable, USER_VOTER, !!!val->intval, 0);
-		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_set_prop_input_suspend(chg, val);
 		break;
+#ifdef CONFIG_MACH_ASUS_SDM660
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 start */
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		rc = smblib_set_prop_charging_enabled(chg, val);
+		break;
+/* Huaqin add for ZQL1650-189 by diganyun at 2018/02/01 end */
+#endif
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
 		rc = smblib_set_prop_system_temp_level(chg, val);
 		break;
