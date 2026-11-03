@@ -20,6 +20,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
 #include <linux/reboot.h>
+#include <linux/timekeeping.h>
 #include <trace/events/mmc.h>
 
 #include "core.h"
@@ -66,6 +67,123 @@ static const unsigned int taac_mant[] = {
 			__res |= resp[__off-1] << ((32 - __shft) % 32);	\
 		__res & __mask;						\
 	})
+
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 start */
+static int IS_BOOT_TIME = 1;
+
+static const struct {
+	u32 manfid;
+	const char *band_type;
+} emmc_vendor_tbl[] = {
+	{ 0x90,    "HYNIX"    },
+	{ 0x15,    "SAMSUNG"  },
+	{ 0x45,    "SANDISK"  },
+	{ 0x70,    "KINGSTON" },
+	{ 0x13,    "MICRON"   },
+	{ 0x10001, "TOSHIBA"  },
+};
+
+#define EMMC_VENDOR_TBL_MAX	ARRAY_SIZE(emmc_vendor_tbl)
+
+static char whole_name[256];
+
+static char *asus_get_emmc_status(struct mmc_card *card)
+{
+	u32 i;
+	static char c_date[9];
+	struct timespec64 now;
+	struct tm tm_val;
+
+	ktime_get_real_ts64(&now);
+	time64_to_tm(now.tv_sec, 0, &tm_val);
+
+	for (i = 0; i < EMMC_VENDOR_TBL_MAX; i++) {
+		if (card->cid.manfid == emmc_vendor_tbl[i].manfid) {
+			memset(whole_name, 0, sizeof(whole_name));
+			strlcpy(whole_name, emmc_vendor_tbl[i].band_type,
+				sizeof(whole_name));
+
+			if (card->ext_csd.rev == 8)
+				strlcat(whole_name, "-v5.1-", sizeof(whole_name));
+			else if (card->ext_csd.rev == 7)
+				strlcat(whole_name, "-v5.0-", sizeof(whole_name));
+			else if (card->ext_csd.rev == 6)
+				strlcat(whole_name, "-v4.5-", sizeof(whole_name));
+			else if (card->ext_csd.rev == 5)
+				strlcat(whole_name, "-v4.41-", sizeof(whole_name));
+
+			strlcat(whole_name, card->mmc_total_size, sizeof(whole_name));
+			strlcat(whole_name, "G-eMMC-", sizeof(whole_name));
+			snprintf(c_date, sizeof(c_date), "%d%02d%02d",
+				 (int)(1900 + tm_val.tm_year),
+				 (int)(1 + tm_val.tm_mon),
+				 (int)tm_val.tm_mday);
+			strlcat(whole_name, c_date, sizeof(whole_name));
+
+			return whole_name;
+		}
+	}
+	return "Unknown";
+}
+
+static char emmc_health[128];
+
+static char *asus_get_emmc_health(struct mmc_card *card)
+{
+	int err = 0;
+	u8 *ext_csd = NULL;
+
+	BUG_ON(!card);
+
+	if (IS_BOOT_TIME == 0) {
+		pr_info("%s: Need to update EXT_CSD data\n", __func__);
+		mmc_get_card(card, NULL);
+		err = mmc_get_ext_csd(card, &ext_csd);
+		if (err || !ext_csd) {
+			pr_err("%s: mmc_get_ext_csd failed (%d)\n",
+			       __func__, err);
+			goto out_free;
+		}
+		card->ext_csd.pre_eol_info =
+			ext_csd[EXT_CSD_PRE_EOL_INFO];
+		card->ext_csd.device_life_time_est_typ_a =
+			ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A];
+		card->ext_csd.device_life_time_est_typ_b =
+			ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B];
+		mmc_put_card(card, NULL);
+	} else {
+		pr_info("%s: EXT_CSD data already up to date.\n", __func__);
+		IS_BOOT_TIME = 0;
+	}
+
+	memset(emmc_health, 0, sizeof(emmc_health));
+	if (card->ext_csd.rev > 6)
+		snprintf(emmc_health, sizeof(emmc_health),
+			 "0x%02x-0x%02x-0x%02x-%s",
+			 card->ext_csd.pre_eol_info,
+			 card->ext_csd.device_life_time_est_typ_a,
+			 card->ext_csd.device_life_time_est_typ_b,
+			 whole_name);
+	else
+		snprintf(emmc_health, sizeof(emmc_health),
+			 "NoSupport-%s", whole_name);
+
+	kfree(ext_csd);
+	return emmc_health;
+
+out_free:
+	mmc_put_card(card, NULL);
+	snprintf(emmc_health, sizeof(emmc_health),
+		 "NoSupport-%s", whole_name);
+	return emmc_health;
+}
+
+static char *asus_get_emmc_total_size(struct mmc_card *card)
+{
+	BUG_ON(!card);
+	return card->mmc_total_size;
+}
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 end */
 
 /*
  * Given the decoded CSD structure, decode the raw CID to our CID structure.
@@ -458,6 +576,17 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		/* Cards with density > 2GiB are sector addressed */
 		if (card->ext_csd.sectors > (2u * 1024 * 1024 * 1024) / 512)
 			mmc_card_set_blockaddr(card);
+
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 start */
+		if (card->ext_csd.sectors > 80000000)
+			snprintf(card->mmc_total_size, sizeof(card->mmc_total_size), "64");
+		else if (card->ext_csd.sectors > 50000000)
+			snprintf(card->mmc_total_size, sizeof(card->mmc_total_size), "32");
+		else if (card->ext_csd.sectors > 20000000)
+			snprintf(card->mmc_total_size, sizeof(card->mmc_total_size), "16");
+		else
+			snprintf(card->mmc_total_size, sizeof(card->mmc_total_size), "8");
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 end */
 	}
 
 	card->ext_csd.strobe_support = ext_csd[EXT_CSD_STROBE_SUPPORT];
@@ -860,6 +989,13 @@ MMC_DEV_ATTR(rel_sectors, "%#x\n", card->ext_csd.rel_sectors);
 MMC_DEV_ATTR(ocr, "0x%08x\n", card->ocr);
 MMC_DEV_ATTR(rca, "0x%04x\n", card->rca);
 MMC_DEV_ATTR(cmdq_en, "%d\n", card->ext_csd.cmdq_en);
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 start */
+MMC_DEV_ATTR(emmc_status, "%s\n", asus_get_emmc_status(card));
+MMC_DEV_ATTR(emmc_health, "%s\n", asus_get_emmc_health(card));
+MMC_DEV_ATTR(emmc_health_A, "0x%02x\n", card->ext_csd.device_life_time_est_typ_a);
+MMC_DEV_ATTR(emmc_health_B, "0x%02x\n", card->ext_csd.device_life_time_est_typ_b);
+MMC_DEV_ATTR(emmc_total_size, "%s\n", asus_get_emmc_total_size(card));
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 end */
 
 static ssize_t mmc_fwrev_show(struct device *dev,
 			      struct device_attribute *attr,
@@ -919,6 +1055,13 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_rca.attr,
 	&dev_attr_dsr.attr,
 	&dev_attr_cmdq_en.attr,
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 start */
+	&dev_attr_emmc_status.attr,
+	&dev_attr_emmc_health.attr,
+	&dev_attr_emmc_health_A.attr,
+	&dev_attr_emmc_health_B.attr,
+	&dev_attr_emmc_total_size.attr,
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 end */
 	NULL,
 };
 ATTRIBUTE_GROUPS(mmc_std);

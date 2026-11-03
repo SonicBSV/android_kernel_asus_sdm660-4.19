@@ -402,6 +402,10 @@ struct mmc_card {
 	struct notifier_block   reboot_notify;
 	enum mmc_pon_type	pon_type;
 	struct mmc_bkops_info bkops;
+
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 start */
+	char			mmc_total_size[8];
+/* Huaqin add for ZQL1650-43 by lanshiming at 2018/1/18 end */
 };
 
 static inline bool mmc_large_sector(struct mmc_card *card)
